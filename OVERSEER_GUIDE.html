@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>OVERSEER — Setup & Operations Guide</title>
+<style>
+  body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #33ff33; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.8; }
+  h1 { color: #66ff66; letter-spacing: 4px; text-shadow: 0 0 10px #1a8c1a; border-bottom: 1px solid #1a3a1a; padding-bottom: 10px; }
+  h2 { color: #ffaa00; margin-top: 30px; letter-spacing: 2px; }
+  h3 { color: #00ccff; }
+  code { background: #111; padding: 2px 6px; border: 1px solid #1a3a1a; }
+  pre { background: #111; padding: 12px; border: 1px solid #1a3a1a; overflow-x: auto; }
+  .warn { color: #ff3333; }
+  .dim { color: #1a8c1a; }
+  a { color: #00ccff; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  hr { border: none; border-top: 1px solid #1a3a1a; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>O.V.E.R.S.E.E.R.</h1>
+<p class="dim">Offline Vault of Essential Records for Survival, Emergency & Endurance Response</p>
+<p>Version 2.0.0 — Setup & Operations Guide</p>
+
+<hr>
+
+<h2>1. WHAT IS OVERSEER?</h2>
+<p>A fully offline, battery-powered platform running on an Orange Pi 5 Max. It provides:</p>
+<ul>
+  <li><strong>KNOWLEDGE</strong> — LLM chat (Qwen 2.5 7B) augmented with offline Kiwix knowledge archives (Wikipedia, medical, repair guides, etc.)</li>
+  <li><strong>LIBRARY</strong> — Browse and read full articles from all loaded ZIM archives</li>
+  <li><strong>COMMS</strong> — Encrypted store-and-forward messaging between registered operators</li>
+  <li><strong>RECREATION</strong> — Text-based games (coming soon)</li>
+  <li><strong>SYSTEM</strong> — Status monitoring and admin panel</li>
+</ul>
+<p>Users connect via phone browser over WiFi. Future: Pi Zero relays over LoRa/Meshtastic.</p>
+
+<hr>
+
+<h2>2. FRESH DEPLOYMENT (Orange Pi 5 Max)</h2>
+
+<h3>Prerequisites</h3>
+<ul>
+  <li>Orange Pi 5 Max with Armbian installed on NVMe</li>
+  <li>Internet connection (for initial setup only)</li>
+  <li>~50GB free disk space (more for Wikipedia)</li>
+</ul>
+
+<h3>Setup</h3>
+<pre>
+git clone https://github.com/edpeck111/overseer.git
+cd overseer
+chmod +x setup.sh
+./setup.sh
+</pre>
+
+<p>The script will automatically:</p>
+<ul>
+  <li>Install Python, pip, system packages</li>
+  <li>Install Flask, requests, psutil, cryptography</li>
+  <li>Install Ollama and pull qwen2.5:7b-instruct-q4_K_M</li>
+  <li>Download kiwix-serve (auto-detects aarch64)</li>
+  <li>Download all 19 ZIM archives (~28GB) with resume support</li>
+  <li>Create Linux startup scripts</li>
+  <li>Generate a systemd service file</li>
+</ul>
+
+<h3>Start manually</h3>
+<pre>./start_overseer.sh</pre>
+
+<h3>Install as boot service</h3>
+<pre>
+sudo cp /tmp/overseer.service /etc/systemd/system/
+sudo systemctl enable overseer
+sudo systemctl start overseer
+</pre>
+
+<p>Server runs on <code>http://&lt;device-ip&gt;:6100</code></p>
+
+<hr>
+
+<h2>3. ADMIN SETUP</h2>
+
+<h3>First login</h3>
+<ol>
+  <li>Open browser, go to <code>http://&lt;device-ip&gt;:6100</code></li>
+  <li>Click to initialize the terminal</li>
+  <li>Navigate to <strong>SYSTEM</strong> tab, then <strong>ADMIN</strong> sub-tab</li>
+  <li>Enter default PIN: <code>1234</code></li>
+  <li class="warn">Change the PIN immediately via the "Change Admin PIN" section</li>
+</ol>
+
+<h3>The SYSADMIN account</h3>
+<p>A <code>SYSADMIN</code> user is auto-created on first boot using the keypair in <code>keys/</code>. The private key (<code>keys/admin_private.pem</code>) stays on the OPi5.</p>
+
+<hr>
+
+<h2>4. REGISTERING OPERATORS</h2>
+
+<h3>For each new user:</h3>
+<ol>
+  <li>Go to <strong>SYSTEM > ADMIN</strong> (enter PIN)</li>
+  <li>Type a callsign (e.g. <code>BRAVO-1</code>)</li>
+  <li>Click <strong>GENERATE KEYPAIR</strong></li>
+  <li>The private key auto-downloads as <code>bravo-1_private_key.pem</code> — save this securely</li>
+  <li>The public key fills in automatically</li>
+  <li>Click <strong>REGISTER</strong></li>
+</ol>
+
+<p>The operator can now log in to COMMS by selecting their callsign.</p>
+
+<hr>
+
+<h2>5. COMMS — MESSAGING</h2>
+
+<h3>Logging in</h3>
+<ol>
+  <li>Navigate to the <strong>COMMS</strong> tab</li>
+  <li>Select your callsign from the operator list</li>
+</ol>
+
+<h3>Sending a message</h3>
+<ol>
+  <li>Click the <strong>COMPOSE</strong> tab</li>
+  <li>Select a recipient from the dropdown</li>
+  <li>Enter a subject (optional) and message body</li>
+  <li>Click <strong>TRANSMIT</strong></li>
+</ol>
+
+<h3>Reading messages</h3>
+<ol>
+  <li>Click <strong>INBOX</strong> — unread messages show a green left border and a badge count</li>
+  <li>Click a message to read it (auto-marks as read)</li>
+  <li>Click <strong>&lt; BACK</strong> to return to the inbox</li>
+</ol>
+
+<h3>Checking sent messages</h3>
+<p>Click the <strong>SENT</strong> tab to see all messages you've transmitted.</p>
+
+<h3>Logging out</h3>
+<p>Click <strong>[DISCONNECT]</strong> in the top bar to return to the operator selection screen.</p>
+
+<hr>
+
+<h2>6. KNOWLEDGE — LLM CHAT</h2>
+
+<h3>Chat sub-tab</h3>
+<ul>
+  <li>Type a question and click <strong>TRANSMIT</strong> (or press Enter)</li>
+  <li>The LLM searches Kiwix archives for relevant context (RAG) and responds</li>
+  <li>Toggle <strong>[KNOWLEDGE BASE AUGMENTATION]</strong> checkbox to disable RAG</li>
+  <li><strong>[CLR]</strong> clears chat history, <strong>[EXPORT]</strong> saves to .txt file</li>
+  <li>Chat history persists in browser localStorage</li>
+</ul>
+
+<h3>Library sub-tab</h3>
+<ul>
+  <li><strong>SEARCH</strong> — full-text search across all loaded ZIM archives</li>
+  <li><strong>BROWSE</strong> — lists all loaded volumes, click to open a volume's main page</li>
+  <li>Click any article to read it — headings are styled for readability</li>
+  <li><strong>LINKED ARTICLES</strong> panel at the bottom shows navigable links from the current article (drag the handle to resize)</li>
+  <li>Click <strong>&lt; BACK</strong> to return to search results</li>
+</ul>
+
+<hr>
+
+<h2>7. PI ZERO CLIENT SETUP (Future)</h2>
+
+<p>The end-goal architecture:</p>
+<pre>
+Phone (WiFi) --> Pi Zero (client relay) --> LoRa/Meshtastic --> OPi5 (server)
+</pre>
+
+<h3>Provisioning a Pi Zero</h3>
+<ol>
+  <li>Register the operator on the OPi5 (see Section 4)</li>
+  <li>Flash the Pi Zero with the client image</li>
+  <li>Copy the operator's private key to: <code>/home/overseer/keys/identity.pem</code></li>
+  <li>The Pi Zero reads <code>identity.pem</code> on boot to authenticate with the OPi5</li>
+  <li>It serves a local WiFi AP for the phone to connect to</li>
+  <li>Messages are queued and synced when in LoRa range of the OPi5</li>
+</ol>
+
+<hr>
+
+<h2>8. KEY MANAGEMENT</h2>
+
+<pre>
+keys/
+  admin_private.pem    — OPi5 system admin key (stays on OPi5)
+  admin_public.pem     — Auto-registered as SYSADMIN user
+  &lt;callsign&gt;_private.pem — Per-user keys (burn onto Pi Zero)
+</pre>
+
+<ul>
+  <li>Ed25519 keypairs — small, fast, quantum-resistant-adjacent</li>
+  <li>Private keys NEVER leave the device they belong to (except during provisioning)</li>
+  <li>The OPi5 only stores public keys in the database</li>
+  <li>Future: messages encrypted end-to-end with recipient's public key</li>
+</ul>
+
+<p class="warn">IMPORTANT: Back up keys/admin_private.pem somewhere safe. If lost, you'll need to regenerate and re-register all operators.</p>
+
+<hr>
+
+<h2>9. ZIM ARCHIVES</h2>
+
+<p>Currently loaded (~28GB):</p>
+<pre>
+Medical Wikipedia     — 75,000+ medical articles
+WikEM                 — Emergency medicine protocols
+iFixit                — Repair guides
+Appropedia            — Sustainability / off-grid
+Energypedia           — Renewable energy
+Wikibooks             — Practical manuals
+Wikivoyage            — Regional survival info
+9x Stack Exchange     — DIY, electronics, cooking, gardening,
+                        mechanics, ham radio, outdoors,
+                        woodworking, homebrew
+3x Project Gutenberg  — Medicine, military, naval
+</pre>
+
+<p>To add Wikipedia (~100GB), uncomment the line in <code>setup.sh</code> and re-run, or download manually:</p>
+<pre>
+cd zim
+curl -C - -L -O https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2026-03.zim
+</pre>
+
+<hr>
+
+<h2>10. FILE STRUCTURE</h2>
+
+<pre>
+overseer/
+  server.py              — Flask backend (RAG, admin, comms APIs)
+  templates/index.html   — Frontend UI (all modules)
+  setup.sh               — Deployment bootstrap script
+  start_overseer.sh      — Linux startup (Kiwix + Ollama + Flask)
+  start_overseer.bat     — Windows startup
+  start_kiwix.bat        — Windows Kiwix launcher
+  overseer.db            — SQLite database (users, messages, settings)
+  keys/                  — Ed25519 keypairs
+  kiwix/                 — kiwix-serve binary
+  zim/                   — ZIM archive files
+  sounds/                — UI keystroke audio (8 WAV files)
+  prepper_llm_project.md — Original project specification
+</pre>
+
+<hr>
+
+<h2>11. TROUBLESHOOTING</h2>
+
+<table style="border-collapse:collapse; width:100%;">
+<tr><td style="padding:6px; border-bottom:1px solid #1a3a1a; color:#ffaa00;">Kiwix server unreachable</td><td style="padding:6px; border-bottom:1px solid #1a3a1a;">Kiwix isn't running. Start it with <code>start_kiwix.sh</code> or check for corrupt ZIM files.</td></tr>
+<tr><td style="padding:6px; border-bottom:1px solid #1a3a1a; color:#ffaa00;">Ollama connection refused</td><td style="padding:6px; border-bottom:1px solid #1a3a1a;">Run <code>ollama serve</code> in a separate terminal, then <code>ollama pull qwen2.5:7b-instruct-q4_K_M</code></td></tr>
+<tr><td style="padding:6px; border-bottom:1px solid #1a3a1a; color:#ffaa00;">ZIM file won't load</td><td style="padding:6px; border-bottom:1px solid #1a3a1a;">Likely a truncated download. Delete it and re-run <code>setup.sh</code> (it resumes/re-downloads).</td></tr>
+<tr><td style="padding:6px; border-bottom:1px solid #1a3a1a; color:#ffaa00;">Garbled characters in articles</td><td style="padding:6px; border-bottom:1px solid #1a3a1a;">UTF-8 encoding issue — already fixed in v2.0.0. Ensure you're on latest code.</td></tr>
+<tr><td style="padding:6px; border-bottom:1px solid #1a3a1a; color:#ffaa00;">Forgot admin PIN</td><td style="padding:6px; border-bottom:1px solid #1a3a1a;">Delete <code>overseer.db</code> and restart. DB will be recreated with default PIN 1234.</td></tr>
+</table>
+
+<hr>
+
+<p class="dim" style="text-align:center; margin-top:40px;">
+  O.V.E.R.S.E.E.R. v2.0.0 — Built for when the grid goes dark.<br>
+  Stay sharp, operator.
+</p>
+
+</body>
+</html>

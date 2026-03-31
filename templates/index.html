@@ -322,6 +322,14 @@
   }
   #splash .splash-content {
     animation: flicker 4s infinite;
+    cursor: pointer;
+  }
+  #splash-boot {
+    animation: flicker 4s infinite;
+    overflow-y: auto;
+    max-height: 100vh;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glow-dim) var(--bg);
   }
 
   /* Action buttons */
@@ -951,7 +959,7 @@
   .comms-content {
     flex: 1;
     overflow-y: auto;
-    padding: 4px;
+    padding: 4px 4px 60px;
   }
   .comms-compose {
     display: none;
@@ -988,6 +996,37 @@
   }
   .msg-item:hover { background: rgba(255,255,255,0.03); }
   .msg-item.unread { border-left: 2px solid var(--glow); }
+  .msg-item.pending { border-left: 2px solid var(--amber); }
+  .msg-request-label {
+    display: inline-block;
+    font-size: 0.6em;
+    padding: 1px 5px;
+    background: var(--amber-dim);
+    color: #000;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-left: 6px;
+  }
+  .msg-request-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .msg-request-actions button {
+    font-family: 'Courier New', monospace;
+    font-size: 0.6em;
+    padding: 2px 8px;
+    background: transparent;
+    border: 1px solid;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .msg-accept { color: var(--glow); border-color: var(--glow-dim); }
+  .msg-accept:hover { background: var(--glow-dim); color: #000; }
+  .msg-block { color: var(--red); border-color: var(--red-dim); }
+  .msg-block:hover { background: var(--red-dim); color: #fff; }
   .msg-item .msg-from {
     color: var(--glow-bright);
     font-size: 0.8em;
@@ -1018,7 +1057,7 @@
   .msg-view-body {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 10px;
+    padding: 12px 10px 60px;
     font-size: 0.8em;
     line-height: 1.7;
     white-space: pre-wrap;
@@ -1054,15 +1093,22 @@
 </style>
 </head>
 <body>
-<!-- SPLASH SCREEN -->
-<div id="splash" onclick="initTerminal()">
-  <div class="splash-content">
-    <div class="title" style="margin-bottom:16px;">OVERSEER</div>
-    <div style="color:var(--glow-dim);font-size:0.7em;letter-spacing:2px;margin-bottom:24px;">
-      Offline Vault of Essential Records for<br>Survival, Emergency &amp; Endurance Response
+<!-- SPLASH / BOOT SCREEN -->
+<div id="splash" onclick="startBoot()">
+  <div style="width:100%; max-width:700px; padding:20px;">
+    <div class="splash-content" id="splash-title" style="text-align:center; margin-bottom:24px;">
+      <div class="title" style="margin-bottom:16px;">OVERSEER</div>
+      <div style="color:var(--glow-dim);font-size:0.7em;letter-spacing:2px;">
+        Offline Vault of Essential Records for<br>Survival, Emergency &amp; Endurance Response
+      </div>
     </div>
-    <div style="color:var(--glow);font-size:0.9em;animation:blink 1.2s step-end infinite;">
-      [ CLICK TO INITIALIZE TERMINAL ]
+    <div id="splash-boot" style="display:none; font-size:0.8em; line-height:1.6;">
+      <span id="boot-output" class="output-area" style="white-space:pre-wrap;"></span>
+    </div>
+    <div id="splash-prompt" style="text-align:center; margin-top:20px;">
+      <div style="color:var(--glow);font-size:0.9em;animation:blink 1.2s step-end infinite; cursor:pointer;">
+        [ CLICK TO INITIALIZE ]
+      </div>
     </div>
   </div>
 </div>
@@ -1205,7 +1251,10 @@
             <button class="article-back" onclick="closeMsgView()">&lt; BACK</button>
             <span id="msg-view-subject" style="color:var(--glow-bright);font-size:0.85em;"></span>
           </div>
-          <div style="font-size:0.7em; color:var(--glow-dim); margin-top:4px;" id="msg-view-meta"></div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+            <span style="font-size:0.7em; color:var(--glow-dim);" id="msg-view-meta"></span>
+            <span style="margin-left:auto; display:flex; gap:4px;" id="msg-view-actions"></span>
+          </div>
         </div>
         <div class="msg-view-body" id="msg-view-body"></div>
       </div>
@@ -1304,6 +1353,10 @@
             </div>
             <div class="admin-msg" id="admin-register-msg"></div>
           </div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">--- BLOCKED CONTACTS ---</div>
+          <div id="admin-blocks-list"></div>
         </div>
         <div class="admin-section">
           <div class="admin-section-title">--- CHANGE ADMIN PIN ---</div>
@@ -1867,21 +1920,57 @@ async function send() {
   chat.scrollTop = chat.scrollHeight;
 }
 
-// === SPLASH & INIT ===
-async function initTerminal() {
-  document.getElementById('splash').style.display = 'none';
-  document.getElementById('terminal').style.display = 'flex';
+// === SPLASH & BOOT ===
+// Use a separate char queue for the boot screen so it doesn't conflict with chat
+let bootCharQueue = [];
+let bootIsTyping = false;
+let bootCharsSinceSound = 0;
 
-  chat = document.getElementById('chat');
-  input = document.getElementById('input');
-  sendBtn = document.getElementById('send');
-  bindInputEvents();
+function bootTypeCharacters(area, text) {
+  bootCharQueue.push(...text.split(''));
+  if (!bootIsTyping) bootDrainQueue(area);
+}
 
-  // Init audio (needs user gesture — splash click provides it)
+function bootDrainQueue(area) {
+  if (bootCharQueue.length === 0) { bootIsTyping = false; return; }
+  bootIsTyping = true;
+  const ch = bootCharQueue.shift();
+  if (ch === '\n') {
+    area.appendChild(document.createTextNode('\n'));
+  } else {
+    const span = document.createElement('span');
+    span.className = 'phosphor-char';
+    span.textContent = ch;
+    area.appendChild(span);
+    bootCharsSinceSound++;
+    if (bootCharsSinceSound >= 5 + Math.floor(Math.random() * 5)) {
+      playKeystroke();
+      bootCharsSinceSound = 0;
+    }
+  }
+  setTimeout(() => bootDrainQueue(area), CHAR_DELAY_FAST);
+}
+
+let bootStarted = false;
+let bootFinished = false;
+
+async function startBoot() {
+  // If boot is done, enter the terminal
+  if (bootFinished) {
+    enterTerminal();
+    return;
+  }
+
+  // Ignore clicks while booting
+  if (bootStarted) return;
+  bootStarted = true;
+
+  // Show boot output, update prompt
+  document.getElementById('splash-boot').style.display = '';
+  document.getElementById('splash-prompt').innerHTML = '<div style="color:var(--glow-dim);font-size:0.8em;">BOOTING...</div>';
+
+  // Init audio (user gesture from click)
   await loadKeySounds();
-
-  // Restore saved chat
-  restoreChat();
 
   // Fetch boot info
   try {
@@ -1891,55 +1980,72 @@ async function initTerminal() {
     bootInfo = null;
   }
 
-  // Brief boot message in knowledge chat
-  if (bootInfo) {
-    const boot = document.createElement('div');
-    boot.className = 'msg assistant';
-    const bootArea = document.createElement('span');
-    bootArea.className = 'output-area';
-    const bootPrefix = document.createElement('span');
-    bootPrefix.className = 'prefix';
-    bootPrefix.textContent = 'OVERSEER>';
-    boot.appendChild(bootPrefix);
-    boot.appendChild(bootArea);
-    chat.appendChild(boot);
+  const bootArea = document.getElementById('boot-output');
 
+  if (bootInfo) {
     const lines = [];
     lines.push('========================================');
     lines.push(' O.V.E.R.S.E.E.R.  v' + bootInfo.version);
     lines.push(' ' + bootInfo.full_name);
     lines.push('========================================');
     lines.push('');
+    lines.push('BUILD DATE:    ' + bootInfo.build_date);
     lines.push('SYSTEM RAM:    ' + bootInfo.ram_total_gb + ' GB total / ' + bootInfo.ram_free_gb + ' GB free');
     lines.push('INFERENCE:     ' + bootInfo.inference_engine);
-    lines.push('ARCHIVES:      ' + bootInfo.total_kb_size_gb + ' GB across ' + bootInfo.zim_files.length + ' volumes');
+    lines.push('KB SERVER:     ' + bootInfo.knowledge_server);
+    lines.push('');
+
     if (bootInfo.models.length > 0) {
-      lines.push('MODEL:         ' + bootInfo.models[0].name);
+      lines.push('--- LOADED MODELS ---');
+      bootInfo.models.forEach(m => {
+        lines.push('  ' + m.name + '  (' + m.size_gb + ' GB)');
+      });
+    } else {
+      lines.push('[!] NO MODELS DETECTED');
     }
     lines.push('');
-    lines.push('All systems operational. Ready for queries.');
-    lines.push('Use module tabs above to access COMMS, RECREATION, or SYSTEM.');
+
+    if (bootInfo.zim_files.length > 0) {
+      lines.push('--- KNOWLEDGE ARCHIVES (' + bootInfo.zim_files.length + ' volumes, ' + bootInfo.total_kb_size_gb + ' GB) ---');
+      bootInfo.zim_files.forEach(z => {
+        lines.push('  ' + z.name + '  [' + z.size_gb + ' GB]');
+      });
+    } else {
+      lines.push('[!] NO KNOWLEDGE ARCHIVES FOUND');
+    }
+
+    lines.push('');
+    lines.push('All systems operational.');
     lines.push('Stay sharp, operator.');
 
-    input.disabled = true;
-    sendBtn.disabled = true;
-
-    CHAR_DELAY = CHAR_DELAY_FAST;
-    typeCharacters(bootArea, lines.join('\n'));
+    bootTypeCharacters(bootArea, lines.join('\n'));
 
     await new Promise(resolve => {
-      const check = () => { if (!isTyping) resolve(); else setTimeout(check, 50); };
+      const check = () => { if (!bootIsTyping) resolve(); else setTimeout(check, 50); };
       check();
     });
+  } else {
+    bootArea.textContent = 'BOOT FAILED \u2014 Cannot reach server.';
+  }
 
-    CHAR_DELAY = CHAR_DELAY_NORMAL;
-    input.disabled = false;
-    sendBtn.disabled = false;
+  bootFinished = true;
+  document.getElementById('splash-prompt').innerHTML = '<div style="color:var(--glow);font-size:0.9em;animation:blink 1.2s step-end infinite;cursor:pointer;">[ CLICK TO ENTER TERMINAL ]</div>';
+}
 
-    // Update status bar
+function enterTerminal() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('terminal').style.display = 'flex';
+
+  chat = document.getElementById('chat');
+  input = document.getElementById('input');
+  sendBtn = document.getElementById('send');
+  bindInputEvents();
+
+  // Restore saved chat
+  restoreChat();
+
+  if (bootInfo) {
     updateStatusBar(bootInfo);
-
-    // Populate system module
     populateSystemInfo(bootInfo);
   }
 
@@ -2099,6 +2205,7 @@ async function pinSubmit() {
       document.getElementById('admin-pin-screen').style.display = 'none';
       document.getElementById('admin-panel').style.display = '';
       adminLoadUsers();
+      adminLoadBlocks();
     } else {
       document.getElementById('pin-status').textContent = 'ACCESS DENIED';
       adminPin = '';
@@ -2230,6 +2337,44 @@ async function adminChangePin() {
   }
 }
 
+async function adminLoadBlocks() {
+  try {
+    const resp = await fetch('/admin/blocks');
+    const data = await resp.json();
+    const container = document.getElementById('admin-blocks-list');
+    if (data.blocks.length === 0) {
+      container.innerHTML = '<div style="color:var(--glow-dim);padding:8px;">No active blocks.</div>';
+      return;
+    }
+    let html = '';
+    data.blocks.forEach(b => {
+      html += '<div class="user-card">';
+      html += '<span style="color:var(--glow);">' + esc(b.blocker) + '</span>';
+      html += '<span style="color:var(--red);">\u2192 blocked \u2192</span>';
+      html += '<span style="color:var(--glow);">' + esc(b.blocked) + '</span>';
+      if (b.undelivered > 0) {
+        html += '<span style="color:var(--amber);font-size:0.7em;margin-left:8px;">' + b.undelivered + ' msg dropped</span>';
+      }
+      html += '<button class="admin-btn" style="padding:3px 8px;font-size:0.65em;margin-left:auto;" onclick="adminUnblock(' + b.user_id + ',' + b.contact_id + ')">UNBLOCK</button>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    document.getElementById('admin-blocks-list').innerHTML = '<div class="admin-msg err">Failed to load blocks</div>';
+  }
+}
+
+async function adminUnblock(userId, contactId) {
+  try {
+    await fetch('/admin/unblock', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, contact_id: contactId})
+    });
+    adminLoadBlocks();
+  } catch(e) {}
+}
+
 // === COMMS ===
 let commsUserId = null;
 let commsCallsign = '';
@@ -2311,14 +2456,49 @@ async function commsLoadInbox() {
     } else {
       badge.style.display = 'none';
     }
+    // Deduplicate blocked status per sender (show dropped count only once)
+    const blockedSenders = {};
+    data.messages.forEach(m => {
+      if (m.contact_status === 'blocked' && m.dropped_count > 0 && !blockedSenders[m.from_id]) {
+        blockedSenders[m.from_id] = m.dropped_count;
+      }
+    });
+
     let html = '';
     data.messages.forEach(m => {
-      const cls = m.read_at ? '' : ' unread';
+      const isBlocked = m.contact_status === 'blocked';
+      const isPending = (m.contact_status === 'pending' || m.contact_status === 'none') && !isBlocked;
+      const isAccepted = m.contact_status === 'accepted';
+      const isOverseer = m.from_callsign === 'OVERSEER';
+      const showRequest = isPending && !isOverseer;
+      const canBlock = (isAccepted || showRequest) && !isOverseer;
+      let cls = m.read_at ? '' : ' unread';
+      if (showRequest) cls = ' pending';
+      if (isBlocked) cls = '';
       const subj = m.subject || '(no subject)';
-      html += '<div class="msg-item' + cls + '" onclick="commsViewMessage(' + m.id + ', \'inbox\')">';
-      html += '<div class="msg-from">FROM: ' + esc(m.from_callsign) + '</div>';
-      html += '<div class="msg-subject">' + esc(subj) + '</div>';
+      html += '<div class="msg-item' + cls + '" style="' + (isBlocked ? 'opacity:0.4;' : '') + '">';
+      html += '<div class="msg-from" onclick="commsViewMessage(' + m.id + ', \'inbox\')" style="cursor:pointer;">FROM: ' + esc(m.from_callsign);
+      if (showRequest) html += '<span class="msg-request-label">NEW CONTACT</span>';
+      if (isBlocked) {
+        html += '<span class="msg-request-label" style="background:var(--red-dim);color:#fff;">BLOCKED</span>';
+        if (blockedSenders[m.from_id]) {
+          html += '<span style="color:var(--amber);font-size:0.65em;margin-left:6px;">' + blockedSenders[m.from_id] + ' msg intercepted</span>';
+          blockedSenders[m.from_id] = 0; // only show once
+        }
+      }
+      html += '</div>';
+      html += '<div class="msg-subject" onclick="commsViewMessage(' + m.id + ', \'inbox\')" style="cursor:pointer;">' + esc(subj) + '</div>';
       html += '<div class="msg-date">' + formatTime(m.sent_at) + '</div>';
+      if (showRequest) {
+        html += '<div class="msg-request-actions">';
+        html += '<button class="msg-accept" onclick="event.stopPropagation();commsAcceptContact(' + m.from_id + ')">ACCEPT</button>';
+        html += '<button class="msg-block" onclick="event.stopPropagation();commsBlockContact(' + m.from_id + ')">BLOCK</button>';
+        html += '</div>';
+      } else if (isAccepted && !isOverseer) {
+        html += '<div class="msg-request-actions">';
+        html += '<button class="msg-block" onclick="event.stopPropagation();commsBlockContact(' + m.from_id + ')" style="font-size:0.55em;">BLOCK</button>';
+        html += '</div>';
+      }
       html += '</div>';
     });
     container.innerHTML = html;
@@ -2352,14 +2532,15 @@ async function commsLoadSent() {
   }
 }
 
+let currentViewMsg = null;
+let currentViewSource = null;
+
 async function commsViewMessage(msgId, source) {
-  // Hide list, show view
   document.getElementById('comms-inbox').style.display = 'none';
   document.getElementById('comms-sent').style.display = 'none';
   document.getElementById('comms-compose').classList.remove('active');
   document.getElementById('comms-msg-view').classList.add('active');
 
-  // Find message in already-loaded data (refetch to be safe)
   const endpoint = source === 'inbox' ? '/comms/inbox/' : '/comms/sent/';
   try {
     const resp = await fetch(endpoint + commsUserId);
@@ -2370,10 +2551,22 @@ async function commsViewMessage(msgId, source) {
       return;
     }
 
+    currentViewMsg = msg;
+    currentViewSource = source;
+
     document.getElementById('msg-view-subject').textContent = msg.subject || '(no subject)';
     const who = source === 'inbox' ? 'FROM: ' + msg.from_callsign : 'TO: ' + msg.to_callsign;
     document.getElementById('msg-view-meta').textContent = who + '  |  ' + formatTime(msg.sent_at);
     document.getElementById('msg-view-body').textContent = msg.body;
+
+    // Action buttons
+    const actions = document.getElementById('msg-view-actions');
+    let btns = '';
+    if (source === 'inbox') {
+      btns += '<button class="admin-btn" style="padding:3px 10px;font-size:0.65em;" onclick="commsReply()">REPLY</button>';
+    }
+    btns += '<button class="admin-btn" style="padding:3px 10px;font-size:0.65em;" onclick="commsForward()">FORWARD</button>';
+    actions.innerHTML = btns;
 
     // Mark as read
     if (source === 'inbox' && !msg.read_at) {
@@ -2384,6 +2577,62 @@ async function commsViewMessage(msgId, source) {
   }
 }
 
+function commsReply() {
+  if (!currentViewMsg) return;
+  // Switch to compose
+  document.getElementById('comms-msg-view').classList.remove('active');
+  document.getElementById('comms-compose').classList.add('active');
+  document.querySelectorAll('.comms-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('ctab-compose').classList.add('active');
+  commsCurrentTab = 'compose';
+
+  // Pre-fill
+  const subj = currentViewMsg.subject || '';
+  const reSubj = subj.startsWith('RE: ') ? subj : 'RE: ' + subj;
+  document.getElementById('compose-subject').value = reSubj;
+
+  // Select the sender as recipient
+  const sel = document.getElementById('compose-to');
+  // Find by callsign since we may not have the sender's ID directly
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].text === currentViewMsg.from_callsign) {
+      sel.selectedIndex = i;
+      break;
+    }
+  }
+
+  // Quote the original message
+  const quote = '\n\n--- ' + currentViewMsg.from_callsign + ' wrote ---\n' + currentViewMsg.body;
+  document.getElementById('compose-body').value = quote;
+  document.getElementById('compose-body').setSelectionRange(0, 0);
+  document.getElementById('compose-body').focus();
+  document.getElementById('compose-msg').textContent = '';
+}
+
+function commsForward() {
+  if (!currentViewMsg) return;
+  document.getElementById('comms-msg-view').classList.remove('active');
+  document.getElementById('comms-compose').classList.add('active');
+  document.querySelectorAll('.comms-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('ctab-compose').classList.add('active');
+  commsCurrentTab = 'compose';
+
+  const subj = currentViewMsg.subject || '';
+  const fwSubj = subj.startsWith('FW: ') ? subj : 'FW: ' + subj;
+  document.getElementById('compose-subject').value = fwSubj;
+
+  // Don't pre-select recipient — user chooses who to forward to
+  document.getElementById('compose-to').selectedIndex = 0;
+
+  // Quote the original
+  const sender = currentViewMsg.from_callsign || currentViewMsg.to_callsign || 'unknown';
+  const quote = '\n\n--- Forwarded from ' + sender + ' ---\n' + currentViewMsg.body;
+  document.getElementById('compose-body').value = quote;
+  document.getElementById('compose-body').setSelectionRange(0, 0);
+  document.getElementById('compose-body').focus();
+  document.getElementById('compose-msg').textContent = '';
+}
+
 function closeMsgView() {
   document.getElementById('comms-msg-view').classList.remove('active');
   switchCommsTab(commsCurrentTab);
@@ -2391,12 +2640,12 @@ function closeMsgView() {
 
 async function commsLoadRecipients() {
   try {
-    const resp = await fetch('/comms/users');
+    const resp = await fetch('/comms/users?viewer=' + commsUserId);
     const data = await resp.json();
     const sel = document.getElementById('compose-to');
     sel.innerHTML = '<option value="">-- SELECT RECIPIENT --</option>';
     data.users.forEach(u => {
-      if (u.id !== commsUserId) {
+      if (u.id !== commsUserId && !u.blocked) {
         sel.innerHTML += '<option value="' + u.id + '">' + esc(u.callsign) + '</option>';
       }
     });
@@ -2432,6 +2681,31 @@ async function commsSend() {
     msgEl.className = 'admin-msg err';
     msgEl.textContent = 'Transmission failed';
   }
+}
+
+// === CONTACT TRUST SYSTEM ===
+async function commsAcceptContact(contactId) {
+  try {
+    await fetch('/comms/contacts/accept', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: commsUserId, contact_id: contactId})
+    });
+    commsLoadInbox();
+    commsLoadRecipients();
+  } catch(e) {}
+}
+
+async function commsBlockContact(contactId) {
+  try {
+    await fetch('/comms/contacts/block', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: commsUserId, contact_id: contactId})
+    });
+    commsLoadInbox();
+    commsLoadRecipients();
+  } catch(e) {}
 }
 </script>
 </body>

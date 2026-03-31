@@ -446,6 +446,13 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_user);
         CREATE INDEX IF NOT EXISTS idx_messages_from ON messages(from_user);
+        CREATE TABLE IF NOT EXISTS contacts (
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            contact_id INTEGER NOT NULL REFERENCES users(id),
+            status TEXT NOT NULL DEFAULT 'pending',
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (user_id, contact_id)
+        );
     """)
     # Set default PIN if not exists
     cur = db.execute("SELECT value FROM settings WHERE key = 'admin_pin'")
@@ -453,8 +460,8 @@ def init_db():
         pin_hash = hashlib.sha256(DEFAULT_ADMIN_PIN.encode()).hexdigest()
         db.execute("INSERT INTO settings (key, value) VALUES ('admin_pin', ?)", (pin_hash,))
 
-    # Register SYSADMIN user with the admin public key if not exists
-    cur = db.execute("SELECT id FROM users WHERE callsign = 'SYSADMIN'")
+    # Register OVERSEER admin user with the admin public key if not exists
+    cur = db.execute("SELECT id FROM users WHERE callsign = 'OVERSEER'")
     if cur.fetchone() is None:
         keys_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keys")
         admin_pub_path = os.path.join(keys_dir, "admin_public.pem")
@@ -463,7 +470,7 @@ def init_db():
                 admin_pub = f.read().strip()
             db.execute(
                 "INSERT INTO users (callsign, public_key, created_at) VALUES (?, ?, ?)",
-                ("SYSADMIN", admin_pub, time.time()),
+                ("OVERSEER", admin_pub, time.time()),
             )
 
     db.commit()
@@ -581,10 +588,23 @@ def admin_generate_keypair():
 
 @app.route("/comms/users")
 def comms_list_users():
-    """List users for comms UI (no keys exposed)."""
+    """List users for comms UI (no keys exposed). Optionally filter by viewer's blocks."""
     db = get_db()
+    viewer_id = request.args.get("viewer")
     rows = db.execute("SELECT id, callsign FROM users ORDER BY callsign").fetchall()
-    return {"users": [dict(r) for r in rows]}
+    users = [dict(r) for r in rows]
+
+    if viewer_id:
+        # Get list of blocked contact IDs for this viewer
+        blocked = db.execute(
+            "SELECT contact_id FROM contacts WHERE user_id = ? AND status = 'blocked'",
+            (viewer_id,),
+        ).fetchall()
+        blocked_ids = {r["contact_id"] for r in blocked}
+        for u in users:
+            u["blocked"] = u["id"] in blocked_ids
+
+    return {"users": users}
 
 
 @app.route("/comms/inbox/<int:user_id>")
@@ -592,13 +612,31 @@ def comms_inbox(user_id):
     db = get_db()
     rows = db.execute("""
         SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
-               u.callsign as from_callsign
+               m.from_user as from_id, u.callsign as from_callsign,
+               COALESCE(c.status, 'none') as contact_status,
+               COALESCE(c.updated_at, 0) as blocked_at
         FROM messages m
         JOIN users u ON u.id = m.from_user
+        LEFT JOIN contacts c ON c.user_id = ? AND c.contact_id = m.from_user
         WHERE m.to_user = ?
         ORDER BY m.sent_at DESC
-    """, (user_id,)).fetchall()
-    return {"messages": [dict(r) for r in rows]}
+    """, (user_id, user_id)).fetchall()
+
+    messages = []
+    for r in rows:
+        msg = dict(r)
+        # For blocked contacts, count how many messages were silently dropped
+        if msg["contact_status"] == "blocked":
+            dropped = db.execute("""
+                SELECT COUNT(*) as cnt FROM messages
+                WHERE from_user = ? AND to_user = ? AND sent_at > ?
+            """, (msg["from_id"], user_id, msg["blocked_at"])).fetchone()
+            msg["dropped_count"] = dropped["cnt"] if dropped else 0
+        else:
+            msg["dropped_count"] = 0
+        messages.append(msg)
+
+    return {"messages": messages}
 
 
 @app.route("/comms/sent/<int:user_id>")
@@ -613,6 +651,13 @@ def comms_sent(user_id):
         ORDER BY m.sent_at DESC
     """, (user_id,)).fetchall()
     return {"messages": [dict(r) for r in rows]}
+
+
+def is_overseer(user_id):
+    """Check if user is the OVERSEER admin (can't be blocked, always gets through)."""
+    db = get_db()
+    row = db.execute("SELECT callsign FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row and row["callsign"] == "OVERSEER"
 
 
 @app.route("/comms/send", methods=["POST"])
@@ -631,11 +676,32 @@ def comms_send():
         return {"error": "Cannot send to yourself"}, 400
 
     db = get_db()
-    # Verify both users exist
-    sender = db.execute("SELECT id FROM users WHERE id = ?", (from_id,)).fetchone()
+    sender = db.execute("SELECT id, callsign FROM users WHERE id = ?", (from_id,)).fetchone()
     recipient = db.execute("SELECT id FROM users WHERE id = ?", (to_id,)).fetchone()
     if not sender or not recipient:
         return {"error": "Invalid sender or recipient"}, 404
+
+    # Check if sender is blocked by recipient (OVERSEER bypasses blocks)
+    if not is_overseer(from_id):
+        contact = db.execute(
+            "SELECT status FROM contacts WHERE user_id = ? AND contact_id = ?",
+            (to_id, from_id),
+        ).fetchone()
+        if contact and contact["status"] == "blocked":
+            # Silent success — sender doesn't know they're blocked
+            return {"ok": True}
+
+    # Create pending contact record if this is first contact (non-OVERSEER)
+    if not is_overseer(from_id):
+        existing = db.execute(
+            "SELECT status FROM contacts WHERE user_id = ? AND contact_id = ?",
+            (to_id, from_id),
+        ).fetchone()
+        if not existing:
+            db.execute(
+                "INSERT INTO contacts (user_id, contact_id, status, updated_at) VALUES (?, ?, 'pending', ?)",
+                (to_id, from_id, time.time()),
+            )
 
     db.execute(
         "INSERT INTO messages (from_user, to_user, subject, body, sent_at) VALUES (?, ?, ?, ?, ?)",
@@ -649,6 +715,84 @@ def comms_send():
 def comms_mark_read(message_id):
     db = get_db()
     db.execute("UPDATE messages SET read_at = ? WHERE id = ? AND read_at IS NULL", (time.time(), message_id))
+    db.commit()
+    return {"ok": True}
+
+
+@app.route("/comms/contacts/<int:user_id>")
+def comms_contacts(user_id):
+    """Get contact list with statuses for a user."""
+    db = get_db()
+    rows = db.execute("""
+        SELECT c.contact_id, c.status, c.updated_at, u.callsign
+        FROM contacts c
+        JOIN users u ON u.id = c.contact_id
+        WHERE c.user_id = ?
+        ORDER BY u.callsign
+    """, (user_id,)).fetchall()
+    return {"contacts": [dict(r) for r in rows]}
+
+
+@app.route("/comms/contacts/accept", methods=["POST"])
+def comms_accept_contact():
+    data = request.json
+    user_id = data.get("user_id")
+    contact_id = data.get("contact_id")
+    db = get_db()
+    db.execute(
+        "UPDATE contacts SET status = 'accepted', updated_at = ? WHERE user_id = ? AND contact_id = ?",
+        (time.time(), user_id, contact_id),
+    )
+    db.commit()
+    return {"ok": True}
+
+
+@app.route("/comms/contacts/block", methods=["POST"])
+def comms_block_contact():
+    data = request.json
+    user_id = data.get("user_id")
+    contact_id = data.get("contact_id")
+    db = get_db()
+    db.execute(
+        "INSERT INTO contacts (user_id, contact_id, status, updated_at) VALUES (?, ?, 'blocked', ?) "
+        "ON CONFLICT(user_id, contact_id) DO UPDATE SET status = 'blocked', updated_at = ?",
+        (user_id, contact_id, time.time(), time.time()),
+    )
+    db.commit()
+    return {"ok": True}
+
+
+@app.route("/admin/blocks")
+def admin_list_blocks():
+    """Admin view of all blocks with undelivered message counts."""
+    db = get_db()
+    rows = db.execute("""
+        SELECT c.user_id, c.contact_id, c.updated_at,
+               u1.callsign as blocker, u2.callsign as blocked,
+               (SELECT COUNT(*) FROM messages m
+                WHERE m.from_user = c.contact_id
+                AND m.to_user = c.user_id
+                AND m.sent_at > c.updated_at) as undelivered
+        FROM contacts c
+        JOIN users u1 ON u1.id = c.user_id
+        JOIN users u2 ON u2.id = c.contact_id
+        WHERE c.status = 'blocked'
+        ORDER BY c.updated_at DESC
+    """).fetchall()
+    return {"blocks": [dict(r) for r in rows]}
+
+
+@app.route("/admin/unblock", methods=["POST"])
+def admin_unblock():
+    """Admin override — remove a block."""
+    data = request.json
+    user_id = data.get("user_id")
+    contact_id = data.get("contact_id")
+    db = get_db()
+    db.execute(
+        "DELETE FROM contacts WHERE user_id = ? AND contact_id = ?",
+        (user_id, contact_id),
+    )
     db.commit()
     return {"ok": True}
 

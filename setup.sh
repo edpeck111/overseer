@@ -152,7 +152,16 @@ done
 log "ZIM downloads complete"
 
 # ============================================================
-# 6. STARTUP SCRIPTS (Linux)
+# 6. FRESH DATABASE
+# ============================================================
+if [ -f "$OVERSEER_DIR/overseer.db" ]; then
+    warn "Existing database found. Keeping it. Delete overseer.db manually for a clean start."
+else
+    log "Database will be created on first server start."
+fi
+
+# ============================================================
+# 7. STARTUP SCRIPTS (Linux)
 # ============================================================
 cat > "$OVERSEER_DIR/start_kiwix.sh" << 'KEOF'
 #!/bin/bash
