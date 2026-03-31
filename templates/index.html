@@ -1,0 +1,2438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>O.V.E.R.S.E.E.R.</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --glow: #33ff33;
+    --glow-dim: #1a8c1a;
+    --glow-bright: #66ff66;
+    --glow-hot: #aaffaa;
+    --amber: #ffaa00;
+    --amber-dim: #996600;
+    --red: #ff3333;
+    --red-dim: #991a1a;
+    --bg: #0a0a0a;
+    --border: #1a3a1a;
+  }
+
+  /* Module color themes */
+  .screen[data-module="knowledge"] {
+    --glow: #33ff33; --glow-dim: #1a8c1a; --glow-bright: #66ff66;
+    --glow-hot: #aaffaa; --border: #1a3a1a;
+  }
+  .screen[data-module="comms"] {
+    --glow: #ffaa00; --glow-dim: #996600; --glow-bright: #ffcc44;
+    --glow-hot: #ffddaa; --border: #3a2a0a;
+  }
+  .screen[data-module="recreation"] {
+    --glow: #00ccff; --glow-dim: #006688; --glow-bright: #44ddff;
+    --glow-hot: #aaeeff; --border: #0a2a3a;
+  }
+  .screen[data-module="system"] {
+    --glow: #cccccc; --glow-dim: #666666; --glow-bright: #eeeeee;
+    --glow-hot: #ffffff; --border: #2a2a2a;
+  }
+
+  body {
+    font-family: 'Courier New', 'Lucida Console', monospace;
+    background: var(--bg);
+    color: var(--glow);
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* CRT scanlines */
+  body::before {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.15) 0px,
+      rgba(0,0,0,0.15) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none; z-index: 1000;
+  }
+
+  /* CRT vignette */
+  body::after {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.65) 100%);
+    pointer-events: none; z-index: 999;
+  }
+
+  @keyframes flicker {
+    0% { opacity: 0.97; } 5% { opacity: 0.95; } 10% { opacity: 0.98; }
+    15% { opacity: 0.96; } 50% { opacity: 0.96; } 100% { opacity: 0.97; }
+  }
+  @keyframes blink {
+    0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { text-shadow: 0 0 4px var(--glow-dim); }
+    50% { text-shadow: 0 0 8px var(--glow), 0 0 16px var(--glow-dim); }
+  }
+  @keyframes scan {
+    0% { top: -4px; } 100% { top: 100%; }
+  }
+  @keyframes spin-frames {
+    0% { content: '|'; } 25% { content: '/'; } 50% { content: '-'; } 75% { content: '\\'; }
+  }
+
+  /* Phosphor glow trail on new characters */
+  @keyframes phosphor-burn {
+    0% {
+      color: #ffffff;
+      text-shadow: 0 0 8px var(--glow-hot), 0 0 16px var(--glow), 0 0 24px var(--glow-dim);
+    }
+    30% {
+      color: var(--glow-bright);
+      text-shadow: 0 0 4px var(--glow), 0 0 8px var(--glow-dim);
+    }
+    100% {
+      color: var(--glow);
+      text-shadow: none;
+    }
+  }
+
+  .phosphor-char {
+    animation: phosphor-burn 0.6s ease-out forwards;
+  }
+
+  .screen {
+    animation: flicker 4s infinite;
+    display: flex; flex-direction: column;
+    height: 100vh;
+    max-width: 900px;
+    margin: 0 auto; width: 100%;
+    padding: 8px;
+    position: relative;
+  }
+
+  .screen::before {
+    content: '';
+    position: absolute; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(transparent, rgba(51,255,51,0.08), transparent);
+    animation: scan 6s linear infinite;
+    pointer-events: none; z-index: 998;
+  }
+
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 8px 4px 10px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .title {
+    font-size: 1.4em; font-weight: bold;
+    letter-spacing: 6px; text-transform: uppercase;
+    color: var(--glow-bright);
+    text-shadow: 0 0 10px var(--glow), 0 0 20px var(--glow-dim), 0 0 40px rgba(51,255,51,0.2);
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+  .subtitle {
+    font-size: 0.7em; color: var(--glow-dim);
+    letter-spacing: 3px; margin-top: 4px;
+  }
+
+  /* === MODULE NAV === */
+  .module-nav {
+    display: flex; gap: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.3);
+  }
+  .module-nav button {
+    font-family: 'Courier New', monospace;
+    font-size: 0.65em; padding: 6px 12px;
+    background: transparent;
+    color: rgba(255,255,255,0.3);
+    border: none;
+    border-bottom: 1px solid transparent;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+    flex: 1;
+    position: relative;
+  }
+  .module-nav button:hover {
+    color: rgba(255,255,255,0.5);
+  }
+  .module-nav button.active {
+    color: var(--glow);
+    border-bottom-color: var(--glow);
+  }
+  .module-nav button .nav-indicator {
+    display: inline-block;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .module-nav button.active .nav-indicator {
+    background: var(--glow);
+    box-shadow: 0 0 4px var(--glow-dim);
+  }
+
+  .status-bar {
+    display: flex; justify-content: space-between;
+    font-size: 0.65em; color: var(--glow-dim);
+    padding: 4px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .status-bar .online { color: var(--glow); }
+
+  /* === MODULE PANELS === */
+  .module-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .module-panel.active {
+    display: flex;
+  }
+
+  #chat {
+    flex: 1; overflow-y: auto;
+    padding: 8px 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glow-dim) var(--bg);
+  }
+  #chat::-webkit-scrollbar { width: 6px; }
+  #chat::-webkit-scrollbar-track { background: var(--bg); }
+  #chat::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+  .msg {
+    margin: 6px 0; padding: 6px 8px;
+    line-height: 1.6; font-size: 0.85em;
+  }
+  .msg.user {
+    color: var(--amber);
+    border-left: 2px solid var(--amber-dim);
+    padding-left: 10px;
+  }
+  .msg.user::before { content: 'OPERATOR> '; color: var(--amber-dim); font-size: 0.85em; }
+  .msg.assistant {
+    color: var(--glow);
+    padding-left: 10px;
+    border-left: 2px solid var(--border);
+  }
+  .msg.assistant .output-area {
+    white-space: pre-wrap; word-wrap: break-word;
+    font-family: 'Courier New', monospace;
+    font-size: 1em; line-height: 1.6;
+    display: inline;
+  }
+  .msg.assistant .prefix {
+    color: var(--glow-dim); font-size: 0.85em;
+    display: block; margin-bottom: 2px;
+  }
+  .msg.error {
+    color: var(--red);
+    border-left: 2px solid var(--red-dim);
+    padding-left: 10px;
+  }
+  .msg.error::before { content: '[! WARNING] '; color: var(--red); font-weight: bold; }
+
+  .cursor-blink::after {
+    content: '\2588';
+    animation: blink 0.8s step-end infinite;
+    color: var(--glow);
+  }
+
+  .loading-bar {
+    padding: 6px 10px;
+    border-left: 2px solid var(--border);
+    margin: 6px 0;
+    font-size: 0.8em;
+    color: var(--glow-dim);
+  }
+  .loading-bar .spinner {
+    display: inline-block; width: 1ch;
+  }
+  .loading-bar .spinner::before {
+    content: '|';
+    animation: spin-frames 0.5s steps(1) infinite;
+  }
+
+  .input-area {
+    border-top: 1px solid var(--border);
+    padding: 8px 4px;
+    flex-shrink: 0;
+  }
+  .input-row {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .prompt-symbol {
+    color: var(--glow-bright); font-size: 1em; font-weight: bold;
+    flex-shrink: 0;
+    text-shadow: 0 0 6px var(--glow-dim);
+  }
+  #input {
+    flex: 1; padding: 8px;
+    background: transparent; border: none;
+    color: var(--glow-bright);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em; outline: none;
+    caret-color: var(--glow);
+  }
+  #input::placeholder { color: var(--glow-dim); opacity: 0.5; }
+  #send {
+    font-family: 'Courier New', monospace;
+    padding: 8px 14px;
+    background: transparent; color: var(--glow);
+    border: 1px solid var(--glow-dim);
+    cursor: pointer; font-size: 0.8em;
+    text-transform: uppercase; letter-spacing: 2px;
+    transition: all 0.15s;
+  }
+  #send:hover {
+    background: var(--glow-dim); color: #000;
+    box-shadow: 0 0 12px var(--glow-dim);
+  }
+  #send:disabled {
+    opacity: 0.3; cursor: default;
+    background: transparent; color: var(--glow-dim);
+  }
+  .toggle-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.7em; color: var(--glow-dim); margin-top: 6px;
+  }
+  .toggle-row input[type="checkbox"] { accent-color: var(--glow); }
+
+  /* Splash screen */
+  #splash {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 2000;
+    text-align: center;
+  }
+  #splash .splash-content {
+    animation: flicker 4s infinite;
+  }
+
+  /* Action buttons */
+  .sound-toggle {
+    cursor: pointer;
+    color: var(--glow-dim);
+    font-size: 1em;
+    user-select: none;
+    padding: 0 4px;
+    transition: color 0.15s;
+  }
+  .sound-toggle:hover { color: var(--glow); }
+
+  /* === KNOWLEDGE SUB-TABS === */
+  .knowledge-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .knowledge-tabs button {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em; padding: 6px 16px;
+    background: transparent;
+    color: var(--glow-dim);
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+  .knowledge-tabs button:hover { color: var(--glow); }
+  .knowledge-tabs button.active {
+    color: var(--glow-bright);
+    border-bottom-color: var(--glow);
+  }
+
+  /* === LIBRARY === */
+  .library-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .library-panel.active { display: flex; }
+  .chat-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .chat-panel.active { display: flex; }
+
+  .library-search-bar {
+    display: flex; gap: 4px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .library-search-bar input {
+    flex: 1; padding: 8px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--glow-bright);
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em; outline: none;
+    caret-color: var(--glow);
+  }
+  .library-search-bar input::placeholder { color: var(--glow-dim); opacity: 0.5; }
+  .library-search-bar input:focus { border-color: var(--glow-dim); }
+  .library-search-bar button {
+    font-family: 'Courier New', monospace;
+    padding: 8px 14px;
+    background: transparent; color: var(--glow);
+    border: 1px solid var(--glow-dim);
+    cursor: pointer; font-size: 0.75em;
+    text-transform: uppercase; letter-spacing: 2px;
+    transition: all 0.15s;
+  }
+  .library-search-bar button:hover {
+    background: var(--glow-dim); color: #000;
+  }
+
+  .library-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glow-dim) var(--bg);
+  }
+  .library-results::-webkit-scrollbar { width: 6px; }
+  .library-results::-webkit-scrollbar-track { background: var(--bg); }
+  .library-results::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+  .library-result-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .library-result-item:hover {
+    background: rgba(255,255,255,0.03);
+  }
+  .library-result-title {
+    color: var(--glow-bright);
+    font-size: 0.85em;
+    margin-bottom: 2px;
+  }
+  .library-result-source {
+    color: var(--glow-dim);
+    font-size: 0.65em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .library-result-count {
+    color: var(--glow-dim);
+    font-size: 0.7em;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Article reader */
+  .article-reader {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .article-reader.active { display: flex; }
+  .article-header {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .article-back {
+    font-family: 'Courier New', monospace;
+    padding: 4px 10px;
+    background: transparent; color: var(--glow);
+    border: 1px solid var(--glow-dim);
+    cursor: pointer; font-size: 0.7em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .article-back:hover {
+    background: var(--glow-dim); color: #000;
+  }
+  .article-title-bar {
+    color: var(--glow-bright);
+    font-size: 0.85em;
+    letter-spacing: 1px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .article-body-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  .article-body-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 140px;
+    background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 20%, transparent 100%);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .article-body-wrap::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 140px;
+    background: linear-gradient(to top, var(--bg) 0%, var(--bg) 20%, transparent 100%);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .article-body {
+    height: 100%;
+    overflow-y: auto;
+    padding: 40px 10px;
+    font-size: 0.8em;
+    line-height: 1.7;
+    color: var(--glow);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glow-dim) var(--bg);
+  }
+  .article-body::-webkit-scrollbar { width: 6px; }
+  .article-body::-webkit-scrollbar-track { background: var(--bg); }
+  .article-body::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+  /* Article headings */
+  .article-body .ah {
+    display: block;
+    color: var(--glow-bright);
+    margin: 1.2em 0 0.4em;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .article-body .ah-1 {
+    font-size: 1.2em;
+    border-bottom-color: var(--glow-dim);
+    text-shadow: 0 0 8px var(--glow-dim);
+    padding-bottom: 6px;
+    margin-top: 0.6em;
+  }
+  .article-body .ah-2 {
+    font-size: 1.05em;
+    border-bottom-color: var(--border);
+  }
+  .article-body .ah-3 {
+    font-size: 0.95em;
+    border-bottom: none;
+    color: var(--glow);
+  }
+  .article-body .ah-4 {
+    font-size: 0.9em;
+    border-bottom: none;
+    color: var(--glow);
+    text-transform: none;
+  }
+
+  /* Article links panel — pills/tags */
+  .article-links-panel {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: 120px;
+    min-height: 40px;
+    max-height: 50vh;
+  }
+  .article-links-handle {
+    padding: 4px 10px;
+    cursor: ns-resize;
+    user-select: none;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    flex-shrink: 0;
+  }
+  .handle-grip {
+    color: rgba(255,255,255,0.2);
+    font-size: 0.6em;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .article-links-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-content: flex-start;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glow-dim) var(--bg);
+  }
+  .article-links-body::-webkit-scrollbar { width: 4px; }
+  .article-links-body::-webkit-scrollbar-track { background: var(--bg); }
+  .article-links-body::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+  .link-pill {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 0.7em;
+    color: var(--glow-dim);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .link-pill:hover {
+    color: var(--glow);
+    border-color: var(--glow-dim);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .library-loading {
+    padding: 12px 10px;
+    color: var(--glow-dim);
+    font-size: 0.8em;
+  }
+  .library-loading .spinner {
+    display: inline-block; width: 1ch;
+  }
+  .library-loading .spinner::before {
+    content: '|';
+    animation: spin-frames 0.5s steps(1) infinite;
+  }
+
+  .library-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--glow-dim);
+    font-size: 0.8em;
+    line-height: 1.8;
+  }
+
+  /* === PLACEHOLDER MODULE STYLES === */
+  .module-placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+  }
+  .module-placeholder .ascii-art {
+    font-size: 0.7em;
+    line-height: 1.2;
+    color: var(--glow-dim);
+    margin-bottom: 24px;
+    white-space: pre;
+  }
+  .module-placeholder .module-title {
+    font-size: 1.2em;
+    color: var(--glow-bright);
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+    text-shadow: 0 0 8px var(--glow-dim);
+  }
+  .module-placeholder .module-status {
+    font-size: 0.8em;
+    color: var(--glow-dim);
+    margin-bottom: 8px;
+  }
+  .module-placeholder .module-desc {
+    font-size: 0.75em;
+    color: var(--glow-dim);
+    max-width: 500px;
+    line-height: 1.6;
+    margin-top: 16px;
+  }
+  .module-placeholder .blink-status {
+    animation: blink 1.5s step-end infinite;
+    color: var(--glow);
+  }
+
+  /* === SYSTEM MODULE === */
+  #system-info {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 8px;
+    font-size: 0.8em;
+    line-height: 1.6;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glow-dim) var(--bg);
+  }
+  #system-info::-webkit-scrollbar { width: 6px; }
+  #system-info::-webkit-scrollbar-track { background: var(--bg); }
+  #system-info::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+  .sys-section {
+    margin-bottom: 16px;
+  }
+  .sys-section-title {
+    color: var(--glow-bright);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  .sys-row {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+  }
+  .sys-label {
+    color: var(--glow-dim);
+    min-width: 160px;
+    flex-shrink: 0;
+  }
+  .sys-value {
+    color: var(--glow);
+  }
+
+  /* === ADMIN PIN PAD === */
+  .pin-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 20px;
+  }
+  .pin-display {
+    font-size: 2em;
+    letter-spacing: 12px;
+    color: var(--glow-bright);
+    text-shadow: 0 0 10px var(--glow-dim);
+    margin-bottom: 20px;
+    min-height: 1.4em;
+    text-align: center;
+    min-width: 160px;
+    border-bottom: 2px solid var(--border);
+    padding: 8px 16px;
+  }
+  .pin-pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    max-width: 240px;
+  }
+  .pin-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 1.4em;
+    padding: 14px;
+    background: rgba(255,255,255,0.03);
+    color: var(--glow);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .pin-btn:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: var(--glow-dim);
+  }
+  .pin-btn:active {
+    background: var(--glow-dim);
+    color: #000;
+  }
+  .pin-btn.pin-wide {
+    grid-column: span 2;
+  }
+  .pin-status {
+    margin-top: 12px;
+    font-size: 0.75em;
+    color: var(--red);
+    min-height: 1.2em;
+  }
+  .pin-label {
+    font-size: 0.7em;
+    color: var(--glow-dim);
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+
+  /* === ADMIN PANEL === */
+  .admin-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 8px;
+    font-size: 0.8em;
+    line-height: 1.6;
+  }
+  .admin-section {
+    margin-bottom: 20px;
+  }
+  .admin-section-title {
+    color: var(--glow-bright);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+    font-size: 0.85em;
+  }
+  .admin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 500px;
+  }
+  .admin-form input, .admin-form textarea {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--glow);
+    outline: none;
+  }
+  .admin-form input:focus, .admin-form textarea:focus {
+    border-color: var(--glow-dim);
+  }
+  .admin-form textarea {
+    min-height: 60px;
+    resize: vertical;
+  }
+  .admin-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75em;
+    padding: 6px 14px;
+    background: transparent;
+    color: var(--glow);
+    border: 1px solid var(--glow-dim);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+    align-self: flex-start;
+  }
+  .admin-btn:hover {
+    background: var(--glow-dim);
+    color: #000;
+  }
+  .admin-btn.danger {
+    color: var(--red);
+    border-color: var(--red-dim);
+  }
+  .admin-btn.danger:hover {
+    background: var(--red-dim);
+    color: #fff;
+  }
+  .user-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .user-card .callsign {
+    color: var(--glow-bright);
+    min-width: 100px;
+    letter-spacing: 1px;
+  }
+  .user-card .key-preview {
+    color: var(--glow-dim);
+    font-size: 0.8em;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .admin-msg {
+    padding: 6px 0;
+    font-size: 0.85em;
+  }
+  .admin-msg.ok { color: var(--glow); }
+  .admin-msg.err { color: var(--red); }
+
+  /* === COMMS MODULE === */
+  .comms-login {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 20px;
+  }
+  .comms-login-label {
+    font-size: 0.7em;
+    color: var(--glow-dim);
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+  .comms-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 300px;
+    width: 100%;
+  }
+  .comms-user-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.03);
+    color: var(--glow);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+    letter-spacing: 2px;
+    transition: all 0.15s;
+  }
+  .comms-user-btn:hover {
+    border-color: var(--glow-dim);
+    background: rgba(255,255,255,0.05);
+  }
+  .comms-interface {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .comms-interface.active { display: flex; }
+  .comms-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 0.75em;
+  }
+  .comms-topbar .comms-identity {
+    color: var(--glow-bright);
+    letter-spacing: 2px;
+  }
+  .comms-topbar .comms-logout {
+    margin-left: auto;
+    cursor: pointer;
+    color: var(--glow-dim);
+    transition: color 0.15s;
+  }
+  .comms-topbar .comms-logout:hover { color: var(--glow); }
+  .comms-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .comms-tabs button {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em;
+    padding: 6px 16px;
+    background: transparent;
+    color: var(--glow-dim);
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+  .comms-tabs button:hover { color: var(--glow); }
+  .comms-tabs button.active {
+    color: var(--glow-bright);
+    border-bottom-color: var(--glow);
+  }
+  .comms-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .comms-compose {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    padding: 8px;
+    gap: 8px;
+  }
+  .comms-compose.active { display: flex; }
+  .comms-compose select, .comms-compose input, .comms-compose textarea {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    padding: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--glow);
+    outline: none;
+  }
+  .comms-compose select { cursor: pointer; }
+  .comms-compose select option { background: #111; color: var(--glow); }
+  .comms-compose textarea {
+    flex: 1;
+    min-height: 100px;
+    resize: none;
+  }
+  .comms-compose input:focus, .comms-compose textarea:focus, .comms-compose select:focus {
+    border-color: var(--glow-dim);
+  }
+  .msg-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .msg-item:hover { background: rgba(255,255,255,0.03); }
+  .msg-item.unread { border-left: 2px solid var(--glow); }
+  .msg-item .msg-from {
+    color: var(--glow-bright);
+    font-size: 0.8em;
+    letter-spacing: 1px;
+  }
+  .msg-item .msg-subject {
+    color: var(--glow);
+    font-size: 0.8em;
+    margin-top: 2px;
+  }
+  .msg-item .msg-date {
+    color: var(--glow-dim);
+    font-size: 0.65em;
+    margin-top: 2px;
+  }
+  .msg-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .msg-view.active { display: flex; }
+  .msg-view-header {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .msg-view-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 10px;
+    font-size: 0.8em;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .comms-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--glow-dim);
+    font-size: 0.8em;
+  }
+  .comms-badge {
+    display: inline-block;
+    background: var(--glow-dim);
+    color: #000;
+    font-size: 0.7em;
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-left: 6px;
+  }
+
+  @media (max-width: 600px) {
+    .title { font-size: 1.1em; letter-spacing: 3px; }
+    .msg { font-size: 0.8em; }
+    .status-bar { font-size: 0.55em; }
+    .module-nav button { font-size: 0.6em; padding: 6px 4px; letter-spacing: 1px; }
+    .module-nav button .nav-indicator { width: 4px; height: 4px; margin-right: 3px; }
+    .module-placeholder .ascii-art { font-size: 0.5em; }
+    .knowledge-tabs button { font-size: 0.65em; padding: 5px 10px; }
+    .library-search-bar input { font-size: 0.8em; }
+    .article-body { font-size: 0.75em; }
+  }
+</style>
+</head>
+<body>
+<!-- SPLASH SCREEN -->
+<div id="splash" onclick="initTerminal()">
+  <div class="splash-content">
+    <div class="title" style="margin-bottom:16px;">OVERSEER</div>
+    <div style="color:var(--glow-dim);font-size:0.7em;letter-spacing:2px;margin-bottom:24px;">
+      Offline Vault of Essential Records for<br>Survival, Emergency &amp; Endurance Response
+    </div>
+    <div style="color:var(--glow);font-size:0.9em;animation:blink 1.2s step-end infinite;">
+      [ CLICK TO INITIALIZE TERMINAL ]
+    </div>
+  </div>
+</div>
+
+<!-- MAIN TERMINAL -->
+<div class="screen" id="terminal" data-module="knowledge" style="display:none;">
+  <div class="header">
+    <div class="title">OVERSEER</div>
+    <div class="subtitle">Offline Vault of Essential Records for Survival, Emergency &amp; Endurance Response</div>
+  </div>
+
+  <!-- MODULE NAVIGATION -->
+  <div class="module-nav">
+    <button class="active" onclick="switchModule('knowledge')" id="nav-knowledge">
+      <span class="nav-indicator"></span>KNOWLEDGE
+    </button>
+    <button onclick="switchModule('comms')" id="nav-comms">
+      <span class="nav-indicator"></span>COMMS
+    </button>
+    <button onclick="switchModule('recreation')" id="nav-recreation">
+      <span class="nav-indicator"></span>RECREATION
+    </button>
+    <button onclick="switchModule('system')" id="nav-system">
+      <span class="nav-indicator"></span>SYSTEM
+    </button>
+  </div>
+
+  <div class="status-bar">
+    <span>SYS: <span class="online" id="sysStatus">BOOTING</span></span>
+    <span id="statusModel">MODEL: ---</span>
+    <span id="statusRam">RAM: ---</span>
+    <span id="statusKb">KB: ---</span>
+    <span id="clock"></span>
+  </div>
+
+  <!-- ==================== KNOWLEDGE MODULE ==================== -->
+  <div id="module-knowledge" class="module-panel active">
+    <div class="knowledge-tabs">
+      <button class="active" onclick="switchKnowledgeTab('chat')" id="ktab-chat">CHAT</button>
+      <button onclick="switchKnowledgeTab('library')" id="ktab-library">LIBRARY</button>
+    </div>
+
+    <!-- CHAT SUB-PANEL -->
+    <div id="knowledge-chat" class="chat-panel active">
+      <div id="chat"></div>
+      <div class="input-area">
+        <div class="input-row">
+          <span class="prompt-symbol">&gt;_</span>
+          <input type="text" id="input" placeholder="ENTER QUERY..." autocomplete="off" spellcheck="false">
+          <button id="send" onclick="send()">TRANSMIT</button>
+        </div>
+        <div class="toggle-row">
+          <input type="checkbox" id="rag" checked>
+          <label for="rag">[KNOWLEDGE BASE AUGMENTATION]</label>
+          <span class="sound-toggle" onclick="clearChat()">[CLR]</span>
+          <span class="sound-toggle" onclick="exportChat()">[EXPORT]</span>
+          <span class="sound-toggle" onclick="toggleSound()" id="soundToggle">[SND: ON]</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIBRARY SUB-PANEL -->
+    <div id="knowledge-library" class="library-panel">
+      <div class="library-search-bar">
+        <input type="text" id="library-search" placeholder="SEARCH ARCHIVES..." autocomplete="off" spellcheck="false">
+        <button onclick="librarySearch()">SEARCH</button>
+        <button onclick="showBookList()" title="Browse volumes" style="letter-spacing:0;">BROWSE</button>
+      </div>
+      <div id="library-content" class="library-results">
+        <div class="library-empty">
+          SEARCH to find articles across all archives, or<br>
+          BROWSE to explore individual volumes.<br><br>
+          All content is available offline from the loaded ZIM volumes.
+        </div>
+      </div>
+
+      <!-- Article reader (hidden until an article is selected) -->
+      <div id="article-reader" class="article-reader">
+        <div class="article-header">
+          <button class="article-back" onclick="closeArticle()">&lt; BACK</button>
+          <span class="article-title-bar" id="article-title">---</span>
+        </div>
+        <div class="article-body-wrap">
+          <div class="article-body" id="article-body"></div>
+        </div>
+        <div id="article-links" class="article-links-panel" style="display:none;">
+          <div class="article-links-handle" id="article-links-handle">
+            <span class="handle-grip">\u2261 LINKED ARTICLES</span>
+          </div>
+          <div class="article-links-body" id="article-links-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== COMMS MODULE ==================== -->
+  <div id="module-comms" class="module-panel">
+    <!-- User selection screen -->
+    <div id="comms-login" class="comms-login">
+      <div class="comms-login-label">IDENTIFY OPERATOR</div>
+      <div id="comms-user-list" class="comms-user-list">
+        Loading operators...
+      </div>
+    </div>
+
+    <!-- Main comms interface (after login) -->
+    <div id="comms-interface" class="comms-interface">
+      <div class="comms-topbar">
+        <span>OPERATOR:</span>
+        <span class="comms-identity" id="comms-identity">---</span>
+        <span class="comms-logout" onclick="commsLogout()">[DISCONNECT]</span>
+      </div>
+      <div class="comms-tabs">
+        <button class="active" onclick="switchCommsTab('inbox')" id="ctab-inbox">INBOX<span id="comms-badge" class="comms-badge" style="display:none;"></span></button>
+        <button onclick="switchCommsTab('sent')" id="ctab-sent">SENT</button>
+        <button onclick="switchCommsTab('compose')" id="ctab-compose">COMPOSE</button>
+      </div>
+
+      <!-- Inbox -->
+      <div id="comms-inbox" class="comms-content" style="display:block;"></div>
+
+      <!-- Sent -->
+      <div id="comms-sent" class="comms-content" style="display:none;"></div>
+
+      <!-- Compose -->
+      <div id="comms-compose" class="comms-compose">
+        <select id="compose-to"></select>
+        <input type="text" id="compose-subject" placeholder="SUBJECT (optional)" autocomplete="off" spellcheck="false">
+        <textarea id="compose-body" placeholder="MESSAGE BODY..."></textarea>
+        <div style="display:flex; gap:8px; flex-shrink:0;">
+          <button class="admin-btn" onclick="commsSend()">TRANSMIT</button>
+          <div class="admin-msg" id="compose-msg"></div>
+        </div>
+      </div>
+
+      <!-- Message view -->
+      <div id="comms-msg-view" class="msg-view">
+        <div class="msg-view-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="article-back" onclick="closeMsgView()">&lt; BACK</button>
+            <span id="msg-view-subject" style="color:var(--glow-bright);font-size:0.85em;"></span>
+          </div>
+          <div style="font-size:0.7em; color:var(--glow-dim); margin-top:4px;" id="msg-view-meta"></div>
+        </div>
+        <div class="msg-view-body" id="msg-view-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== RECREATION MODULE ==================== -->
+  <div id="module-recreation" class="module-panel">
+    <div class="module-placeholder">
+      <div class="ascii-art">
+    .     .       .  .   . .   .   . .    +  .
+      .     .  :     .    .. :. .___---------___.
+           .  .   .    .  :.:. _".^ .^ ^.  '.. :"-_. .
+        .  :       .  .  .:../:            . .^  :.:\.
+            .   . :: +. :.:/: .   .    .        . . .:\
+     .  :    .     . _ gy:/:    .     .  . |.    . .. :\
+      .. . .   .   . .:!googoo:/. .:  .   . .    ..\:. :.:\
+       .+ . . .  .  .gdpbj$/:.:.  . : .   . . .:.\:. . .::\
+       :!8dg8dp!:. .:/.    . :  .  .  . :  .   ..!:. .:\
+       . .. .: .:  . .:  .  . .  .  . . :.: . .. \. :.:\
+        :. :.  .   .:  .   .   .  . .  ..:. .  .:  :. .:\\</div>
+      <div class="module-title">RECREATION TERMINAL</div>
+      <div class="module-status">STATUS: <span class="blink-status">LOADING ARCHIVES</span></div>
+      <div class="module-desc">
+        Text-based adventure games. Puzzles. Survival scenarios.
+        Strategic simulations. Word games.
+        Because even in the wasteland, morale matters.
+        <br><br>
+        [ DEPLOYMENT PENDING ]
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SYSTEM MODULE ==================== -->
+  <div id="module-system" class="module-panel">
+    <div class="knowledge-tabs">
+      <button class="active" onclick="switchSystemTab('status')" id="systab-status">STATUS</button>
+      <button onclick="switchSystemTab('admin')" id="systab-admin">ADMIN</button>
+    </div>
+
+    <!-- STATUS SUB-PANEL -->
+    <div id="system-status" class="chat-panel active">
+      <div id="system-info">
+        <div class="sys-section">
+          <div class="sys-section-title">--- SYSTEM STATUS ---</div>
+          <div id="sys-core-info">Loading system information...</div>
+        </div>
+        <div class="sys-section">
+          <div class="sys-section-title">--- LOADED MODELS ---</div>
+          <div id="sys-models">Scanning...</div>
+        </div>
+        <div class="sys-section">
+          <div class="sys-section-title">--- KNOWLEDGE ARCHIVES ---</div>
+          <div id="sys-archives">Indexing...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN SUB-PANEL -->
+    <div id="system-admin" class="library-panel">
+      <!-- PIN entry (shown when locked) -->
+      <div id="admin-pin-screen" class="pin-overlay">
+        <div class="pin-label">ADMIN AUTHENTICATION</div>
+        <div class="pin-display" id="pin-display"></div>
+        <div class="pin-pad">
+          <div class="pin-btn" onclick="pinPress('1')">1</div>
+          <div class="pin-btn" onclick="pinPress('2')">2</div>
+          <div class="pin-btn" onclick="pinPress('3')">3</div>
+          <div class="pin-btn" onclick="pinPress('4')">4</div>
+          <div class="pin-btn" onclick="pinPress('5')">5</div>
+          <div class="pin-btn" onclick="pinPress('6')">6</div>
+          <div class="pin-btn" onclick="pinPress('7')">7</div>
+          <div class="pin-btn" onclick="pinPress('8')">8</div>
+          <div class="pin-btn" onclick="pinPress('9')">9</div>
+          <div class="pin-btn" onclick="pinClear()">CLR</div>
+          <div class="pin-btn" onclick="pinPress('0')">0</div>
+          <div class="pin-btn" onclick="pinSubmit()">ENT</div>
+        </div>
+        <div class="pin-status" id="pin-status"></div>
+      </div>
+
+      <!-- Admin panel (shown when unlocked) -->
+      <div id="admin-panel" class="admin-panel" style="display:none;">
+        <div class="admin-section">
+          <div class="admin-section-title">--- REGISTERED OPERATORS ---</div>
+          <div id="admin-user-list"></div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">--- REGISTER NEW OPERATOR ---</div>
+          <div class="admin-form">
+            <input type="text" id="admin-callsign" placeholder="CALLSIGN (e.g. ALPHA-1)" autocomplete="off" spellcheck="false">
+            <textarea id="admin-pubkey" placeholder="PASTE PUBLIC KEY (PEM format)"></textarea>
+            <div style="display:flex; gap:6px;">
+              <button class="admin-btn" onclick="adminRegisterUser()">REGISTER</button>
+              <button class="admin-btn" onclick="adminGenerateKeypair()">GENERATE KEYPAIR</button>
+            </div>
+            <div class="admin-msg" id="admin-register-msg"></div>
+          </div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">--- CHANGE ADMIN PIN ---</div>
+          <div class="admin-form">
+            <input type="password" id="admin-old-pin" placeholder="CURRENT PIN" autocomplete="off">
+            <input type="password" id="admin-new-pin" placeholder="NEW PIN (min 4 digits)" autocomplete="off">
+            <button class="admin-btn" onclick="adminChangePin()">UPDATE PIN</button>
+            <div class="admin-msg" id="admin-pin-msg"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let chat, input, sendBtn;
+const conversationHistory = [];
+let charQueue = [];
+let isTyping = false;
+let outputArea = null;
+let charsSinceSound = 0;
+let CHAR_DELAY = 18;
+const CHAR_DELAY_NORMAL = 18;
+const CHAR_DELAY_FAST = 3;
+const STORAGE_KEY = 'overseer_chat_history';
+let bootInfo = null;
+
+// === MODULE SWITCHING ===
+function switchModule(name) {
+  const screen = document.getElementById('terminal');
+  screen.setAttribute('data-module', name);
+
+  // Update nav buttons
+  document.querySelectorAll('.module-nav button').forEach(btn => btn.classList.remove('active'));
+  document.getElementById('nav-' + name).classList.add('active');
+
+  // Update panels
+  document.querySelectorAll('.module-panel').forEach(panel => panel.classList.remove('active'));
+  document.getElementById('module-' + name).classList.add('active');
+
+  // Focus input if switching to knowledge
+  if (name === 'knowledge' && input) {
+    setTimeout(() => input.focus(), 50);
+  }
+
+  // Populate system info if switching to system and we have boot data
+  if (name === 'system' && bootInfo) {
+    populateSystemInfo(bootInfo);
+  }
+
+  // Load comms user list if switching to comms and not logged in
+  if (name === 'comms' && !commsUserId) {
+    commsLoadUserList();
+  }
+}
+
+function populateSystemInfo(info) {
+  // Core info
+  let coreHtml = '';
+  coreHtml += '<div class="sys-row"><span class="sys-label">VERSION:</span><span class="sys-value">v' + info.version + '</span></div>';
+  coreHtml += '<div class="sys-row"><span class="sys-label">BUILD DATE:</span><span class="sys-value">' + info.build_date + '</span></div>';
+  coreHtml += '<div class="sys-row"><span class="sys-label">CODENAME:</span><span class="sys-value">' + info.codename + '</span></div>';
+  coreHtml += '<div class="sys-row"><span class="sys-label">SYSTEM RAM:</span><span class="sys-value">' + info.ram_total_gb + ' GB total / ' + info.ram_free_gb + ' GB free</span></div>';
+  coreHtml += '<div class="sys-row"><span class="sys-label">INFERENCE ENGINE:</span><span class="sys-value">' + info.inference_engine + '</span></div>';
+  coreHtml += '<div class="sys-row"><span class="sys-label">KB SERVER:</span><span class="sys-value">' + info.knowledge_server + '</span></div>';
+  document.getElementById('sys-core-info').innerHTML = coreHtml;
+
+  // Models
+  let modelsHtml = '';
+  if (info.models.length > 0) {
+    info.models.forEach(m => {
+      modelsHtml += '<div class="sys-row"><span class="sys-label">' + m.name + '</span><span class="sys-value">' + m.size_gb + ' GB  |  Pulled: ' + m.date + '</span></div>';
+    });
+  } else {
+    modelsHtml = '<div style="color:var(--red);">[!] NO MODELS DETECTED</div>';
+  }
+  document.getElementById('sys-models').innerHTML = modelsHtml;
+
+  // Archives
+  let archivesHtml = '';
+  if (info.zim_files.length > 0) {
+    info.zim_files.forEach(z => {
+      archivesHtml += '<div class="sys-row"><span class="sys-label">' + z.name + '</span><span class="sys-value">[' + z.size_gb + ' GB]  (' + z.date + ')</span></div>';
+      archivesHtml += '<div style="padding-left:168px;color:var(--glow-dim);font-size:0.9em;">' + z.desc + '</div>';
+    });
+    archivesHtml += '<div class="sys-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;"><span class="sys-label">TOTAL ARCHIVE SIZE:</span><span class="sys-value">' + info.total_kb_size_gb + ' GB</span></div>';
+  } else {
+    archivesHtml = '<div style="color:var(--red);">[!] NO KNOWLEDGE ARCHIVES FOUND</div>';
+  }
+  document.getElementById('sys-archives').innerHTML = archivesHtml;
+}
+
+// === AUDIO ENGINE ===
+let audioCtx = null;
+let soundEnabled = true;
+const keyBuffers = [];
+let keysLoaded = false;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('soundToggle').textContent = soundEnabled ? '[SND: ON]' : '[SND: OFF]';
+}
+
+async function loadKeySounds() {
+  const ctx = getAudioCtx();
+  for (let i = 1; i <= 8; i++) {
+    try {
+      const num = String(i).padStart(2, '0');
+      const resp = await fetch('/sounds/key' + num + '.wav');
+      const buf = await resp.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(buf);
+      keyBuffers.push(decoded);
+    } catch(e) { console.warn('Failed to load key' + i, e); }
+  }
+  keysLoaded = keyBuffers.length > 0;
+}
+
+function playKeystroke() {
+  if (!soundEnabled || !keysLoaded) return;
+  try {
+    const ctx = getAudioCtx();
+    const buf = keyBuffers[Math.floor(Math.random() * keyBuffers.length)];
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.95 + Math.random() * 0.1;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.5 + Math.random() * 0.15;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playNewline() {
+  if (!soundEnabled || !keysLoaded) return;
+  try {
+    const ctx = getAudioCtx();
+    const buf = keyBuffers[Math.floor(Math.random() * keyBuffers.length)];
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.7;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.35;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playError() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 330;
+      gain.gain.setValueAtTime(0.2, t + i * 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t + i * 0.2);
+      osc.stop(t + i * 0.2 + 0.15);
+    }
+  } catch(e) {}
+}
+
+// === CLOCK ===
+function updateClock() {
+  const el = document.getElementById('clock');
+  if (!el) return;
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  el.textContent = h + ':' + m + ':' + s;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function bindInputEvents() {
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+  });
+  document.getElementById('library-search').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); librarySearch(); }
+  });
+}
+
+// === KNOWLEDGE SUB-TABS ===
+function switchKnowledgeTab(tab) {
+  document.querySelectorAll('.knowledge-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('ktab-' + tab).classList.add('active');
+
+  document.getElementById('knowledge-chat').classList.toggle('active', tab === 'chat');
+  document.getElementById('knowledge-library').classList.toggle('active', tab === 'library');
+
+  if (tab === 'chat') input.focus();
+  if (tab === 'library') document.getElementById('library-search').focus();
+}
+
+// === LIBRARY ===
+let libraryHistory = []; // navigation stack for back button
+
+async function showBookList() {
+  const contentDiv = document.getElementById('library-content');
+  const readerDiv = document.getElementById('article-reader');
+  readerDiv.classList.remove('active');
+  contentDiv.style.display = '';
+  libraryHistory = [];
+
+  contentDiv.innerHTML = '<div class="library-loading"><span class="spinner"></span> LOADING CATALOG...</div>';
+
+  try {
+    const resp = await fetch('/library/books');
+    const data = await resp.json();
+
+    if (data.error) {
+      contentDiv.innerHTML = '<div class="library-empty">[!] ' + esc(data.error) + '</div>';
+      return;
+    }
+
+    if (data.books.length === 0) {
+      contentDiv.innerHTML = '<div class="library-empty">No volumes loaded.<br>Check that ZIM files are in the /zim directory.</div>';
+      return;
+    }
+
+    let html = '<div class="library-result-count">' + data.books.length + ' volumes loaded</div>';
+    data.books.forEach(b => {
+      html += '<div class="library-result-item" onclick="openArticle(\'' + b.path.replace(/'/g, "\\'") + '\')">';
+      html += '<div class="library-result-title">' + esc(b.title) + '</div>';
+      let meta = '';
+      if (b.articles) meta += b.articles + ' articles';
+      if (b.summary) meta += (meta ? ' \u2014 ' : '') + b.summary.substring(0, 100);
+      if (meta) html += '<div class="library-result-source">' + esc(meta) + '</div>';
+      html += '</div>';
+    });
+    contentDiv.innerHTML = html;
+  } catch(e) {
+    contentDiv.innerHTML = '<div class="library-empty">[!] CATALOG FAILED \u2014 Cannot reach knowledge server.</div>';
+  }
+}
+
+async function librarySearch() {
+  const q = document.getElementById('library-search').value.trim();
+  if (!q) return;
+
+  const contentDiv = document.getElementById('library-content');
+  const readerDiv = document.getElementById('article-reader');
+
+  readerDiv.classList.remove('active');
+  contentDiv.style.display = '';
+  libraryHistory = [];
+
+  contentDiv.innerHTML = '<div class="library-loading"><span class="spinner"></span> SEARCHING ARCHIVES...</div>';
+
+  try {
+    const resp = await fetch('/library/search?q=' + encodeURIComponent(q) + '&limit=30');
+    const data = await resp.json();
+
+    if (data.error) {
+      contentDiv.innerHTML = '<div class="library-empty">[!] ' + esc(data.error) + '</div>';
+      return;
+    }
+
+    if (data.results.length === 0) {
+      contentDiv.innerHTML = '<div class="library-empty">No results found for "' + esc(q) + '".<br>Try different search terms.</div>';
+      return;
+    }
+
+    let html = '<div class="library-result-count">' + data.results.length + ' results found</div>';
+    data.results.forEach(r => {
+      html += '<div class="library-result-item" onclick="openArticle(\'' + r.link.replace(/'/g, "\\'") + '\')">';
+      html += '<div class="library-result-title">' + esc(r.title) + '</div>';
+      html += '<div class="library-result-source">' + esc(r.source) + '</div>';
+      html += '</div>';
+    });
+    contentDiv.innerHTML = html;
+  } catch(e) {
+    contentDiv.innerHTML = '<div class="library-empty">[!] SEARCH FAILED \u2014 Cannot reach knowledge server.</div>';
+  }
+}
+
+async function openArticle(path) {
+  const contentDiv = document.getElementById('library-content');
+  const readerDiv = document.getElementById('article-reader');
+  const titleBar = document.getElementById('article-title');
+  const bodyDiv = document.getElementById('article-body');
+  const linksPanel = document.getElementById('article-links');
+  const linksList = document.getElementById('article-links-list');
+
+  titleBar.textContent = 'LOADING...';
+  bodyDiv.textContent = '';
+  linksPanel.style.display = 'none';
+  linksList.innerHTML = '';
+
+  contentDiv.style.display = 'none';
+  readerDiv.classList.add('active');
+
+  try {
+    const resp = await fetch('/library/article?path=' + encodeURIComponent(path));
+    const data = await resp.json();
+
+    if (data.error) {
+      titleBar.textContent = 'ERROR';
+      bodyDiv.textContent = data.error;
+      return;
+    }
+
+    titleBar.textContent = data.title;
+    bodyDiv.innerHTML = formatArticleText(data.text);
+    bodyDiv.scrollTop = 0;
+
+    // Show linked articles as pills
+    if (data.links && data.links.length > 0) {
+      linksPanel.style.display = '';
+      let linksHtml = '';
+      data.links.forEach(lnk => {
+        linksHtml += '<span class="link-pill" onclick="navigateArticle(\'' + lnk.link.replace(/'/g, "\\'") + '\')" title="' + esc(lnk.title) + '">';
+        linksHtml += esc(lnk.title);
+        linksHtml += '</span>';
+      });
+      linksList.innerHTML = linksHtml;
+    }
+  } catch(e) {
+    titleBar.textContent = 'ERROR';
+    bodyDiv.textContent = 'Failed to load article. Knowledge server may be offline.';
+  }
+}
+
+function navigateArticle(path) {
+  // Push current state to history for back button
+  const titleBar = document.getElementById('article-title');
+  libraryHistory.push({
+    title: titleBar.textContent,
+    path: path
+  });
+  openArticle(path);
+}
+
+// === DRAG-RESIZE LINKED ARTICLES PANEL ===
+(function() {
+  let dragging = false;
+  let startY = 0;
+  let startH = 0;
+
+  document.addEventListener('mousedown', e => {
+    const handle = document.getElementById('article-links-handle');
+    if (!handle || !handle.contains(e.target)) return;
+    const panel = document.getElementById('article-links');
+    dragging = true;
+    startY = e.clientY;
+    startH = panel.offsetHeight;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const panel = document.getElementById('article-links');
+    const delta = startY - e.clientY;  // drag up = bigger
+    const newH = Math.max(40, Math.min(window.innerHeight * 0.5, startH + delta));
+    panel.style.height = newH + 'px';
+  });
+
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+function closeArticle() {
+  if (libraryHistory.length > 0) {
+    // Go back in article navigation history
+    const prev = libraryHistory.pop();
+    // We need the *previous* article's path, but we stored the destination path
+    // So we just go back to the results list if history is a simple stack
+  }
+
+  const contentDiv = document.getElementById('library-content');
+  const readerDiv = document.getElementById('article-reader');
+
+  readerDiv.classList.remove('active');
+  contentDiv.style.display = '';
+}
+
+// === TYPEWRITER WITH PHOSPHOR GLOW ===
+function typeCharacters(area, text) {
+  charQueue.push(...text.split(''));
+  if (!isTyping) drainQueue(area);
+}
+
+function drainQueue(area) {
+  if (charQueue.length === 0) { isTyping = false; return; }
+  isTyping = true;
+
+  const ch = charQueue.shift();
+
+  if (ch === '\n') {
+    area.appendChild(document.createTextNode('\n'));
+  } else {
+    const span = document.createElement('span');
+    span.className = 'phosphor-char';
+    span.textContent = ch;
+    area.appendChild(span);
+    charsSinceSound++;
+    if (charsSinceSound >= 5 + Math.floor(Math.random() * 5)) {
+      playKeystroke();
+      charsSinceSound = 0;
+    }
+  }
+
+  chat.scrollTop = chat.scrollHeight;
+  setTimeout(() => drainQueue(area), CHAR_DELAY);
+}
+
+// === LOADING ===
+function showLoading() {
+  const loader = document.createElement('div');
+  loader.className = 'loading-bar';
+  loader.innerHTML = '<span class="spinner"></span> ACCESSING ARCHIVES <span class="dots"></span>';
+  chat.appendChild(loader);
+  chat.scrollTop = chat.scrollHeight;
+
+  let dotCount = 0;
+  let elapsed = 0;
+  const phases = [
+    'ACCESSING ARCHIVES',
+    'CROSS-REFERENCING KNOWLEDGE BASE',
+    'COMPILING RESPONSE',
+    'PROCESSING QUERY',
+    'SEARCHING RECORDS'
+  ];
+  loader._interval = setInterval(() => {
+    elapsed++;
+    dotCount = (dotCount % 3) + 1;
+    const phase = phases[Math.min(Math.floor(elapsed / 5), phases.length - 1)];
+    const dots = '.'.repeat(dotCount);
+    const secs = elapsed + 's';
+    const blocks = '\u2593'.repeat(Math.min(elapsed, 40));
+    loader.innerHTML = '<span class="spinner"></span> ' + phase + dots + ' [' + secs + '] ' + blocks;
+  }, 1000);
+
+  return loader;
+}
+
+function hideLoading(loader) {
+  if (loader && loader._interval) clearInterval(loader._interval);
+  if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+}
+
+// === MAIN SEND ===
+async function send() {
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  sendBtn.disabled = true;
+  input.disabled = true;
+
+  conversationHistory.push({role: 'user', content: q});
+
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.textContent = q;
+  chat.appendChild(userDiv);
+  chat.scrollTop = chat.scrollHeight;
+
+  const loader = showLoading();
+
+  const assistantDiv = document.createElement('div');
+  assistantDiv.className = 'msg assistant';
+
+  const prefix = document.createElement('span');
+  prefix.className = 'prefix';
+  prefix.textContent = 'OVERSEER>';
+  assistantDiv.appendChild(prefix);
+
+  const area = document.createElement('span');
+  area.className = 'output-area cursor-blink';
+  assistantDiv.appendChild(area);
+
+  let gotFirstToken = false;
+  let fullResponse = '';
+
+  try {
+    const resp = await fetch('/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: q, rag: document.getElementById('rag').checked, history: conversationHistory.slice(0, -1)})
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.context !== undefined) {
+              hideLoading(loader);
+              chat.appendChild(assistantDiv);
+              chat.scrollTop = chat.scrollHeight;
+            }
+            if (data.token) {
+              if (!gotFirstToken) {
+                gotFirstToken = true;
+                hideLoading(loader);
+                if (!assistantDiv.parentNode) chat.appendChild(assistantDiv);
+              }
+              fullResponse += data.token;
+              typeCharacters(area, data.token);
+            }
+            if (data.done) {
+              // Will remove cursor after drain
+            }
+            if (data.error) {
+              hideLoading(loader);
+              playError();
+              const errDiv = document.createElement('div');
+              errDiv.className = 'msg error';
+              errDiv.textContent = data.error;
+              chat.appendChild(errDiv);
+              chat.scrollTop = chat.scrollHeight;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+  } catch(e) {
+    hideLoading(loader);
+    playError();
+    const errDiv = document.createElement('div');
+    errDiv.className = 'msg error';
+    errDiv.textContent = 'SIGNAL LOST \u2014 Server unreachable. Check hardware.';
+    chat.appendChild(errDiv);
+  }
+
+  // Wait for typewriter to finish
+  await new Promise(resolve => {
+    const check = () => { if (!isTyping) resolve(); else setTimeout(check, 50); };
+    check();
+  });
+
+  area.classList.remove('cursor-blink');
+  conversationHistory.push({role: 'assistant', content: fullResponse});
+  saveChat();
+  sendBtn.disabled = false;
+  input.disabled = false;
+  input.focus();
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// === SPLASH & INIT ===
+async function initTerminal() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('terminal').style.display = 'flex';
+
+  chat = document.getElementById('chat');
+  input = document.getElementById('input');
+  sendBtn = document.getElementById('send');
+  bindInputEvents();
+
+  // Init audio (needs user gesture — splash click provides it)
+  await loadKeySounds();
+
+  // Restore saved chat
+  restoreChat();
+
+  // Fetch boot info
+  try {
+    const resp = await fetch('/boot');
+    bootInfo = await resp.json();
+  } catch(e) {
+    bootInfo = null;
+  }
+
+  // Brief boot message in knowledge chat
+  if (bootInfo) {
+    const boot = document.createElement('div');
+    boot.className = 'msg assistant';
+    const bootArea = document.createElement('span');
+    bootArea.className = 'output-area';
+    const bootPrefix = document.createElement('span');
+    bootPrefix.className = 'prefix';
+    bootPrefix.textContent = 'OVERSEER>';
+    boot.appendChild(bootPrefix);
+    boot.appendChild(bootArea);
+    chat.appendChild(boot);
+
+    const lines = [];
+    lines.push('========================================');
+    lines.push(' O.V.E.R.S.E.E.R.  v' + bootInfo.version);
+    lines.push(' ' + bootInfo.full_name);
+    lines.push('========================================');
+    lines.push('');
+    lines.push('SYSTEM RAM:    ' + bootInfo.ram_total_gb + ' GB total / ' + bootInfo.ram_free_gb + ' GB free');
+    lines.push('INFERENCE:     ' + bootInfo.inference_engine);
+    lines.push('ARCHIVES:      ' + bootInfo.total_kb_size_gb + ' GB across ' + bootInfo.zim_files.length + ' volumes');
+    if (bootInfo.models.length > 0) {
+      lines.push('MODEL:         ' + bootInfo.models[0].name);
+    }
+    lines.push('');
+    lines.push('All systems operational. Ready for queries.');
+    lines.push('Use module tabs above to access COMMS, RECREATION, or SYSTEM.');
+    lines.push('Stay sharp, operator.');
+
+    input.disabled = true;
+    sendBtn.disabled = true;
+
+    CHAR_DELAY = CHAR_DELAY_FAST;
+    typeCharacters(bootArea, lines.join('\n'));
+
+    await new Promise(resolve => {
+      const check = () => { if (!isTyping) resolve(); else setTimeout(check, 50); };
+      check();
+    });
+
+    CHAR_DELAY = CHAR_DELAY_NORMAL;
+    input.disabled = false;
+    sendBtn.disabled = false;
+
+    // Update status bar
+    updateStatusBar(bootInfo);
+
+    // Populate system module
+    populateSystemInfo(bootInfo);
+  }
+
+  // Start live status polling
+  setInterval(pollStatus, 30000);
+
+  input.focus();
+}
+
+// === LIVE STATUS BAR ===
+async function pollStatus() {
+  try {
+    const resp = await fetch('/status');
+    const data = await resp.json();
+    document.getElementById('statusRam').textContent = 'RAM: ' + data.ram_free_gb + 'GB FREE';
+    document.getElementById('sysStatus').textContent = 'OPERATIONAL';
+  } catch(e) {
+    document.getElementById('sysStatus').textContent = 'DEGRADED';
+    document.getElementById('sysStatus').style.color = 'var(--red)';
+  }
+}
+
+function updateStatusBar(info) {
+  document.getElementById('sysStatus').textContent = 'OPERATIONAL';
+  if (info.models.length > 0) {
+    const name = info.models[0].name.split(':')[0].toUpperCase();
+    document.getElementById('statusModel').textContent = 'MODEL: ' + name;
+  }
+  document.getElementById('statusRam').textContent = 'RAM: ' + info.ram_free_gb + 'GB FREE';
+  document.getElementById('statusKb').textContent = 'KB: ' + info.total_kb_size_gb + 'GB';
+}
+
+// === CLEAR CHAT ===
+function clearChat() {
+  if (chat) chat.innerHTML = '';
+  conversationHistory.length = 0;
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+// === EXPORT CHAT ===
+function exportChat() {
+  if (conversationHistory.length === 0) return;
+  const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  let text = 'O.V.E.R.S.E.E.R. \u2014 Chat Export\n';
+  text += 'Date: ' + new Date().toLocaleString() + '\n';
+  text += '========================================\n\n';
+  conversationHistory.forEach(msg => {
+    const prefix = msg.role === 'user' ? 'OPERATOR> ' : 'OVERSEER>\n';
+    text += prefix + msg.content + '\n\n';
+  });
+  const blob = new Blob([text], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'overseer-log-' + now + '.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// === CHAT PERSISTENCE ===
+function saveChat() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversationHistory));
+  } catch(e) {}
+}
+
+function restoreChat() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    const history = JSON.parse(saved);
+    if (!history.length) return;
+
+    const sep = document.createElement('div');
+    sep.className = 'msg assistant';
+    sep.innerHTML = '<span class="prefix">OVERSEER></span><span class="output-area" style="color:var(--glow-dim);">\u2014\u2014\u2014 RESTORED SESSION (' + history.length + ' messages) \u2014\u2014\u2014</span>';
+    chat.appendChild(sep);
+
+    history.forEach(msg => {
+      if (msg.role === 'user') {
+        const div = document.createElement('div');
+        div.className = 'msg user';
+        div.textContent = msg.content;
+        chat.appendChild(div);
+      } else {
+        const div = document.createElement('div');
+        div.className = 'msg assistant';
+        div.innerHTML = '<span class="prefix">OVERSEER></span><span class="output-area">' + cleanMarkdown(esc(msg.content)) + '</span>';
+        chat.appendChild(div);
+      }
+      conversationHistory.push(msg);
+    });
+    chat.scrollTop = chat.scrollHeight;
+  } catch(e) {}
+}
+
+// === MARKDOWN CLEANUP ===
+function cleanMarkdown(text) {
+  text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
+  text = text.replace(/```[a-z]*\n?/g, '');
+  text = text.replace(/^#{1,4}\s+/gm, '');
+  return text;
+}
+
+function formatArticleText(text) {
+  // Escape HTML first
+  let html = esc(text);
+  // Convert heading markers to styled spans
+  html = html.replace(/&lt;&lt;H([1-4])&gt;&gt;(.*?)&lt;&lt;\/\1&gt;&gt;/g,
+    function(match, level, title) {
+      return '<span class="ah ah-' + level + '">' + title + '</span>';
+    });
+  return html;
+}
+
+function esc(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// === SYSTEM TABS ===
+function switchSystemTab(tab) {
+  document.querySelectorAll('#module-system .knowledge-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('systab-' + tab).classList.add('active');
+  document.getElementById('system-status').classList.toggle('active', tab === 'status');
+  document.getElementById('system-admin').classList.toggle('active', tab === 'admin');
+}
+
+// === ADMIN PIN ===
+let adminPin = '';
+let adminUnlocked = false;
+
+function pinPress(n) {
+  if (adminPin.length >= 8) return;
+  adminPin += n;
+  document.getElementById('pin-display').textContent = '\u2022'.repeat(adminPin.length);
+  document.getElementById('pin-status').textContent = '';
+}
+
+function pinClear() {
+  adminPin = '';
+  document.getElementById('pin-display').textContent = '';
+  document.getElementById('pin-status').textContent = '';
+}
+
+async function pinSubmit() {
+  if (!adminPin) return;
+  try {
+    const resp = await fetch('/admin/verify-pin', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: adminPin})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      adminUnlocked = true;
+      document.getElementById('admin-pin-screen').style.display = 'none';
+      document.getElementById('admin-panel').style.display = '';
+      adminLoadUsers();
+    } else {
+      document.getElementById('pin-status').textContent = 'ACCESS DENIED';
+      adminPin = '';
+      document.getElementById('pin-display').textContent = '';
+    }
+  } catch(e) {
+    document.getElementById('pin-status').textContent = 'CONNECTION ERROR';
+  }
+}
+
+// === ADMIN FUNCTIONS ===
+async function adminLoadUsers() {
+  try {
+    const resp = await fetch('/admin/users');
+    const data = await resp.json();
+    const container = document.getElementById('admin-user-list');
+    if (data.users.length === 0) {
+      container.innerHTML = '<div style="color:var(--glow-dim);padding:8px;">No operators registered. Use the form below to add one.</div>';
+      return;
+    }
+    let html = '';
+    data.users.forEach(u => {
+      const date = new Date(u.created_at * 1000).toLocaleDateString();
+      html += '<div class="user-card">';
+      html += '<span class="callsign">' + esc(u.callsign) + '</span>';
+      html += '<span class="key-preview">' + esc(u.public_key.substring(0, 40)) + '...</span>';
+      html += '<span style="color:var(--glow-dim);font-size:0.7em;">' + date + '</span>';
+      html += '<button class="admin-btn danger" style="padding:3px 8px;font-size:0.65em;" onclick="adminDeleteUser(' + u.id + ',\'' + esc(u.callsign) + '\')">DEL</button>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    document.getElementById('admin-user-list').innerHTML = '<div class="admin-msg err">Failed to load users</div>';
+  }
+}
+
+async function adminRegisterUser() {
+  const callsign = document.getElementById('admin-callsign').value.trim();
+  const pubkey = document.getElementById('admin-pubkey').value.trim();
+  const msgEl = document.getElementById('admin-register-msg');
+
+  if (!callsign || !pubkey) {
+    msgEl.className = 'admin-msg err';
+    msgEl.textContent = 'Callsign and public key required';
+    return;
+  }
+
+  try {
+    const resp = await fetch('/admin/users', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({callsign, public_key: pubkey})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      msgEl.className = 'admin-msg ok';
+      msgEl.textContent = 'Operator ' + data.callsign + ' registered';
+      document.getElementById('admin-callsign').value = '';
+      document.getElementById('admin-pubkey').value = '';
+      adminLoadUsers();
+    } else {
+      msgEl.className = 'admin-msg err';
+      msgEl.textContent = data.error;
+    }
+  } catch(e) {
+    msgEl.className = 'admin-msg err';
+    msgEl.textContent = 'Connection error';
+  }
+}
+
+async function adminGenerateKeypair() {
+  const msgEl = document.getElementById('admin-register-msg');
+  try {
+    const resp = await fetch('/admin/generate-keypair', {method: 'POST'});
+    const data = await resp.json();
+
+    // Put public key in the form
+    document.getElementById('admin-pubkey').value = data.public_key;
+
+    // Download private key as file
+    const blob = new Blob([data.private_key], {type: 'text/plain'});
+    const callsign = document.getElementById('admin-callsign').value.trim() || 'operator';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = callsign.toLowerCase() + '_private_key.pem';
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    msgEl.className = 'admin-msg ok';
+    msgEl.textContent = 'Keypair generated. Private key downloaded. Public key filled in above.';
+  } catch(e) {
+    msgEl.className = 'admin-msg err';
+    msgEl.textContent = 'Failed to generate keypair';
+  }
+}
+
+async function adminDeleteUser(id, callsign) {
+  if (!confirm('Remove operator ' + callsign + '? This will delete all their messages.')) return;
+  try {
+    await fetch('/admin/users/' + id, {method: 'DELETE'});
+    adminLoadUsers();
+  } catch(e) {}
+}
+
+async function adminChangePin() {
+  const oldPin = document.getElementById('admin-old-pin').value;
+  const newPin = document.getElementById('admin-new-pin').value;
+  const msgEl = document.getElementById('admin-pin-msg');
+
+  try {
+    const resp = await fetch('/admin/change-pin', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({current: oldPin, new: newPin})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      msgEl.className = 'admin-msg ok';
+      msgEl.textContent = 'PIN updated';
+      document.getElementById('admin-old-pin').value = '';
+      document.getElementById('admin-new-pin').value = '';
+    } else {
+      msgEl.className = 'admin-msg err';
+      msgEl.textContent = data.error;
+    }
+  } catch(e) {
+    msgEl.className = 'admin-msg err';
+    msgEl.textContent = 'Connection error';
+  }
+}
+
+// === COMMS ===
+let commsUserId = null;
+let commsCallsign = '';
+let commsCurrentTab = 'inbox';
+
+async function commsLoadUserList() {
+  try {
+    const resp = await fetch('/comms/users');
+    const data = await resp.json();
+    const container = document.getElementById('comms-user-list');
+    if (data.users.length === 0) {
+      container.innerHTML = '<div class="comms-empty">No operators registered.<br>Use SYSTEM > ADMIN to add operators.</div>';
+      return;
+    }
+    let html = '';
+    data.users.forEach(u => {
+      html += '<div class="comms-user-btn" onclick="commsLogin(' + u.id + ',\'' + esc(u.callsign).replace(/'/g, "\\'") + '\')">' + esc(u.callsign) + '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    document.getElementById('comms-user-list').innerHTML = '<div class="comms-empty">Connection error</div>';
+  }
+}
+
+function commsLogin(userId, callsign) {
+  commsUserId = userId;
+  commsCallsign = callsign;
+  document.getElementById('comms-login').style.display = 'none';
+  document.getElementById('comms-interface').classList.add('active');
+  document.getElementById('comms-identity').textContent = callsign;
+  switchCommsTab('inbox');
+  commsLoadRecipients();
+}
+
+function commsLogout() {
+  commsUserId = null;
+  commsCallsign = '';
+  document.getElementById('comms-interface').classList.remove('active');
+  document.getElementById('comms-login').style.display = '';
+  commsLoadUserList();
+}
+
+function switchCommsTab(tab) {
+  commsCurrentTab = tab;
+  document.querySelectorAll('.comms-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('ctab-' + tab).classList.add('active');
+
+  document.getElementById('comms-inbox').style.display = tab === 'inbox' ? 'block' : 'none';
+  document.getElementById('comms-sent').style.display = tab === 'sent' ? 'block' : 'none';
+  document.getElementById('comms-compose').classList.toggle('active', tab === 'compose');
+  document.getElementById('comms-msg-view').classList.remove('active');
+
+  if (tab === 'inbox') commsLoadInbox();
+  if (tab === 'sent') commsLoadSent();
+}
+
+function formatTime(ts) {
+  const d = new Date(ts * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+async function commsLoadInbox() {
+  if (!commsUserId) return;
+  const container = document.getElementById('comms-inbox');
+  try {
+    const resp = await fetch('/comms/inbox/' + commsUserId);
+    const data = await resp.json();
+    if (data.messages.length === 0) {
+      container.innerHTML = '<div class="comms-empty">No messages received.</div>';
+      document.getElementById('comms-badge').style.display = 'none';
+      return;
+    }
+    const unread = data.messages.filter(m => !m.read_at).length;
+    const badge = document.getElementById('comms-badge');
+    if (unread > 0) {
+      badge.textContent = unread;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+    let html = '';
+    data.messages.forEach(m => {
+      const cls = m.read_at ? '' : ' unread';
+      const subj = m.subject || '(no subject)';
+      html += '<div class="msg-item' + cls + '" onclick="commsViewMessage(' + m.id + ', \'inbox\')">';
+      html += '<div class="msg-from">FROM: ' + esc(m.from_callsign) + '</div>';
+      html += '<div class="msg-subject">' + esc(subj) + '</div>';
+      html += '<div class="msg-date">' + formatTime(m.sent_at) + '</div>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div class="comms-empty">Connection error</div>';
+  }
+}
+
+async function commsLoadSent() {
+  if (!commsUserId) return;
+  const container = document.getElementById('comms-sent');
+  try {
+    const resp = await fetch('/comms/sent/' + commsUserId);
+    const data = await resp.json();
+    if (data.messages.length === 0) {
+      container.innerHTML = '<div class="comms-empty">No messages sent.</div>';
+      return;
+    }
+    let html = '';
+    data.messages.forEach(m => {
+      const subj = m.subject || '(no subject)';
+      html += '<div class="msg-item" onclick="commsViewMessage(' + m.id + ', \'sent\')">';
+      html += '<div class="msg-from">TO: ' + esc(m.to_callsign) + '</div>';
+      html += '<div class="msg-subject">' + esc(subj) + '</div>';
+      html += '<div class="msg-date">' + formatTime(m.sent_at) + '</div>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div class="comms-empty">Connection error</div>';
+  }
+}
+
+async function commsViewMessage(msgId, source) {
+  // Hide list, show view
+  document.getElementById('comms-inbox').style.display = 'none';
+  document.getElementById('comms-sent').style.display = 'none';
+  document.getElementById('comms-compose').classList.remove('active');
+  document.getElementById('comms-msg-view').classList.add('active');
+
+  // Find message in already-loaded data (refetch to be safe)
+  const endpoint = source === 'inbox' ? '/comms/inbox/' : '/comms/sent/';
+  try {
+    const resp = await fetch(endpoint + commsUserId);
+    const data = await resp.json();
+    const msg = data.messages.find(m => m.id === msgId);
+    if (!msg) {
+      document.getElementById('msg-view-body').textContent = 'Message not found';
+      return;
+    }
+
+    document.getElementById('msg-view-subject').textContent = msg.subject || '(no subject)';
+    const who = source === 'inbox' ? 'FROM: ' + msg.from_callsign : 'TO: ' + msg.to_callsign;
+    document.getElementById('msg-view-meta').textContent = who + '  |  ' + formatTime(msg.sent_at);
+    document.getElementById('msg-view-body').textContent = msg.body;
+
+    // Mark as read
+    if (source === 'inbox' && !msg.read_at) {
+      fetch('/comms/read/' + msgId, {method: 'POST'});
+    }
+  } catch(e) {
+    document.getElementById('msg-view-body').textContent = 'Failed to load message';
+  }
+}
+
+function closeMsgView() {
+  document.getElementById('comms-msg-view').classList.remove('active');
+  switchCommsTab(commsCurrentTab);
+}
+
+async function commsLoadRecipients() {
+  try {
+    const resp = await fetch('/comms/users');
+    const data = await resp.json();
+    const sel = document.getElementById('compose-to');
+    sel.innerHTML = '<option value="">-- SELECT RECIPIENT --</option>';
+    data.users.forEach(u => {
+      if (u.id !== commsUserId) {
+        sel.innerHTML += '<option value="' + u.id + '">' + esc(u.callsign) + '</option>';
+      }
+    });
+  } catch(e) {}
+}
+
+async function commsSend() {
+  const toId = document.getElementById('compose-to').value;
+  const subject = document.getElementById('compose-subject').value.trim();
+  const body = document.getElementById('compose-body').value.trim();
+  const msgEl = document.getElementById('compose-msg');
+
+  if (!toId) { msgEl.className = 'admin-msg err'; msgEl.textContent = 'Select a recipient'; return; }
+  if (!body) { msgEl.className = 'admin-msg err'; msgEl.textContent = 'Message body required'; return; }
+
+  try {
+    const resp = await fetch('/comms/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({from: commsUserId, to: parseInt(toId), subject, body})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      msgEl.className = 'admin-msg ok';
+      msgEl.textContent = 'Message transmitted';
+      document.getElementById('compose-subject').value = '';
+      document.getElementById('compose-body').value = '';
+    } else {
+      msgEl.className = 'admin-msg err';
+      msgEl.textContent = data.error;
+    }
+  } catch(e) {
+    msgEl.className = 'admin-msg err';
+    msgEl.textContent = 'Transmission failed';
+  }
+}
+</script>
+</body>
+</html>

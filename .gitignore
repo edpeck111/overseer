@@ -1,0 +1,6 @@
+overseer.db
+keys/*_private.pem
+__pycache__/
+zim/
+kiwix/
+.claude/
