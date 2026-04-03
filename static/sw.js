@@ -1,17 +1,19 @@
 // O.V.E.R.S.E.E.R. Service Worker
 // Caches static assets for offline access; API calls always go to network
 
-const CACHE_NAME = 'overseer-v1';
+const CACHE_NAME = 'overseer-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/css/core.css',
   '/static/css/knowledge.css',
   '/static/css/comms.css',
   '/static/css/system.css',
+  '/static/css/medical.css',
   '/static/js/core.js',
   '/static/js/knowledge.js',
   '/static/js/comms.js',
   '/static/js/system.js',
+  '/static/js/medical.js',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'

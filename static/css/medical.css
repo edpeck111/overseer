@@ -1,0 +1,287 @@
+/* === MEDICAL TRIAGE MODULE === */
+
+.medical-panel {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.medical-panel.active { display: flex; }
+
+/* Category grid */
+.triage-categories {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glow-dim) var(--bg);
+}
+.triage-categories::-webkit-scrollbar { width: 6px; }
+.triage-categories::-webkit-scrollbar-track { background: var(--bg); }
+.triage-categories::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+.triage-header {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  text-align: center;
+}
+.triage-header-title {
+  font-size: 0.85em;
+  color: var(--glow-bright);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.triage-header-sub {
+  font-size: 0.7em;
+  color: var(--glow-dim);
+  margin-top: 2px;
+}
+
+.triage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.triage-cat-btn {
+  font-family: 'Courier New', monospace;
+  padding: 14px 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  color: var(--glow);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.triage-cat-btn:hover {
+  border-color: var(--glow-dim);
+  background: rgba(255,255,255,0.04);
+}
+.triage-cat-btn .cat-icon {
+  font-size: 1.3em;
+  color: var(--glow-bright);
+}
+.triage-cat-btn .cat-label {
+  font-size: 0.7em;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Triage flow (question/answer UI) */
+.triage-flow {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.triage-flow.active { display: flex; }
+
+.triage-flow-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.triage-back {
+  font-family: 'Courier New', monospace;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--glow);
+  border: 1px solid var(--glow-dim);
+  cursor: pointer;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  transition: all 0.15s;
+}
+.triage-back:hover {
+  background: var(--glow-dim);
+  color: #000;
+}
+.triage-flow-title {
+  color: var(--glow-bright);
+  font-size: 0.85em;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.triage-flow-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px 60px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glow-dim) var(--bg);
+}
+.triage-flow-body::-webkit-scrollbar { width: 6px; }
+.triage-flow-body::-webkit-scrollbar-track { background: var(--bg); }
+.triage-flow-body::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+/* Question card */
+.triage-question {
+  margin-bottom: 16px;
+}
+.triage-q-text {
+  font-size: 0.95em;
+  color: var(--glow-bright);
+  line-height: 1.6;
+  margin-bottom: 12px;
+  padding: 8px;
+  border-left: 2px solid var(--glow-dim);
+}
+.triage-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.triage-opt-btn {
+  font-family: 'Courier New', monospace;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  color: var(--glow);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.85em;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+.triage-opt-btn:hover {
+  border-color: var(--glow-dim);
+  background: rgba(255,255,255,0.05);
+}
+
+/* Action card (treatment instructions) */
+.triage-action {
+  border: 1px solid var(--glow-dim);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: rgba(51,255,51,0.03);
+}
+.triage-action.warning {
+  border-color: var(--amber-dim);
+  background: rgba(255,170,0,0.03);
+}
+.triage-action.danger {
+  border-color: var(--red-dim);
+  background: rgba(255,51,51,0.03);
+}
+
+.triage-action-title {
+  font-size: 0.85em;
+  color: var(--glow-bright);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.triage-action.warning .triage-action-title { color: var(--amber); }
+.triage-action.danger .triage-action-title { color: var(--red); }
+
+.triage-action-body {
+  font-size: 0.85em;
+  line-height: 1.7;
+  color: var(--glow);
+}
+.triage-action-body ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.triage-action-body li {
+  margin-bottom: 4px;
+}
+
+.triage-do-dont {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.triage-do {
+  border: 1px solid var(--glow-dim);
+  padding: 8px;
+}
+.triage-dont {
+  border: 1px solid var(--red-dim);
+  padding: 8px;
+}
+.triage-do-title {
+  font-size: 0.75em;
+  letter-spacing: 2px;
+  color: var(--glow);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.triage-dont-title {
+  font-size: 0.75em;
+  letter-spacing: 2px;
+  color: var(--red);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.triage-do ul, .triage-dont ul {
+  padding-left: 16px;
+  font-size: 0.8em;
+  line-height: 1.5;
+}
+.triage-do li { color: var(--glow); }
+.triage-dont li { color: var(--red); }
+
+/* History breadcrumb */
+.triage-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 0.65em;
+  color: var(--glow-dim);
+}
+.triage-crumb {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.triage-crumb:hover { color: var(--glow); }
+.triage-crumb::after { content: ' >'; margin-left: 4px; }
+.triage-crumb:last-child { color: var(--glow); cursor: default; }
+.triage-crumb:last-child::after { content: ''; }
+
+/* Kiwix reference link */
+.triage-ref {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.triage-ref-btn {
+  font-family: 'Courier New', monospace;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--glow-dim);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 0.75em;
+  transition: all 0.15s;
+}
+.triage-ref-btn:hover {
+  color: var(--glow);
+  border-color: var(--glow-dim);
+}
+
+@media (max-width: 600px) {
+  .triage-grid { grid-template-columns: 1fr 1fr; }
+  .triage-cat-btn { min-height: 50px; padding: 10px 8px; }
+  .triage-cat-btn .cat-label { font-size: 0.65em; }
+  .triage-do-dont { grid-template-columns: 1fr; }
+  .triage-q-text { font-size: 0.9em; }
+  .triage-opt-btn { font-size: 0.85em; padding: 12px 14px; }
+}

@@ -26,7 +26,7 @@ if (window.visualViewport) {
 const MODULE_COLORS = {
   knowledge:  { glow: '#33ff33', dim: '#1a8c1a', border: '#1a3a1a' },
   comms:      { glow: '#ffaa00', dim: '#996600', border: '#3a2a0a' },
-  recreation: { glow: '#00ccff', dim: '#006688', border: '#0a2a3a' },
+  medical:    { glow: '#ff4444', dim: '#991a1a', border: '#3a0a0a' },
   system:     { glow: '#cccccc', dim: '#666666', border: '#2a2a2a' }
 };
 

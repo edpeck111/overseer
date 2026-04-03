@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/static/css/knowledge.css">
 <link rel="stylesheet" href="/static/css/comms.css">
 <link rel="stylesheet" href="/static/css/system.css">
+<link rel="stylesheet" href="/static/css/medical.css">
 </head>
 <body>
 <!-- SPLASH / BOOT SCREEN -->
@@ -95,8 +96,8 @@
     <button onclick="switchModule('comms')" id="nav-comms">
       <span class="nav-indicator"></span>COMMS
     </button>
-    <button onclick="switchModule('recreation')" id="nav-recreation">
-      <span class="nav-indicator"></span>RECREATION
+    <button onclick="switchModule('medical')" id="nav-medical">
+      <span class="nav-indicator"></span>MEDICAL
     </button>
     <button onclick="switchModule('system')" id="nav-system">
       <span class="nav-indicator"></span>SYSTEM
@@ -230,30 +231,66 @@
     </div>
   </div>
 
-  <!-- ==================== RECREATION MODULE ==================== -->
-  <div id="module-recreation" class="module-panel">
-    <div class="module-placeholder">
-      <div class="ascii-art">
-    .     .       .  .   . .   .   . .    +  .
-      .     .  :     .    .. :. .___---------___.
-           .  .   .    .  :.:. _".^ .^ ^.  '.. :"-_. .
-        .  :       .  .  .:../:            . .^  :.:\.
-            .   . :: +. :.:/: .   .    .        . . .:\
-     .  :    .     . _ gy:/:    .     .  . |.    . .. :\
-      .. . .   .   . .:!googoo:/. .:  .   . .    ..\:. :.:\
-       .+ . . .  .  .gdpbj$/:.:.  . : .   . . .:.\:. . .::\
-       :!8dg8dp!:. .:/.    . :  .  .  . :  .   ..!:. .:\
-       . .. .: .:  . .:  .  . .  .  . . :.: . .. \. :.:\
-        :. :.  .   .:  .   .   .  . .  ..:. .  .:  :. .:\\</div>
-      <div class="module-title">RECREATION TERMINAL</div>
-      <div class="module-status">STATUS: <span class="blink-status">LOADING ARCHIVES</span></div>
-      <div class="module-desc">
-        Text-based adventure games. Puzzles. Survival scenarios.
-        Strategic simulations. Word games.
-        Because even in the wasteland, morale matters.
-        <br><br>
-        [ DEPLOYMENT PENDING ]
+  <!-- ==================== MEDICAL TRIAGE MODULE ==================== -->
+  <div id="module-medical" class="module-panel">
+    <!-- Category selection -->
+    <div class="triage-categories">
+      <div class="triage-header">
+        <div class="triage-header-title">FIELD MEDICAL TRIAGE</div>
+        <div class="triage-header-sub">Guided emergency response — no AI required</div>
       </div>
+      <div class="triage-grid">
+        <div class="triage-cat-btn" onclick="triageStart('bleeding')">
+          <span class="cat-icon">+</span>
+          <span class="cat-label">BLEEDING</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('burns')">
+          <span class="cat-icon">~</span>
+          <span class="cat-label">BURNS</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('choking')">
+          <span class="cat-icon">!</span>
+          <span class="cat-label">CHOKING</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('fractures')">
+          <span class="cat-icon">/</span>
+          <span class="cat-label">FRACTURES</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('dehydration')">
+          <span class="cat-icon">~</span>
+          <span class="cat-label">DEHYDRATION</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('hypothermia')">
+          <span class="cat-icon">*</span>
+          <span class="cat-label">HYPOTHERMIA</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('heatillness')">
+          <span class="cat-icon">^</span>
+          <span class="cat-label">HEAT ILLNESS</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('allergic')">
+          <span class="cat-icon">!</span>
+          <span class="cat-label">ALLERGIC RXNS</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('shock')">
+          <span class="cat-icon">!</span>
+          <span class="cat-label">SHOCK</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('wounds')">
+          <span class="cat-icon">x</span>
+          <span class="cat-label">WOUND CARE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Triage flow (question/action cards) -->
+    <div class="triage-flow">
+      <div class="triage-flow-header">
+        <button class="triage-back" onclick="triageBack()">&lt; BACK</button>
+        <span class="triage-flow-title" id="triage-flow-title">---</span>
+      </div>
+      <div class="triage-breadcrumb" id="triage-breadcrumb"></div>
+      <div class="triage-flow-body" id="triage-flow-body"></div>
     </div>
   </div>
 
@@ -346,6 +383,7 @@
 <script src="/static/js/knowledge.js"></script>
 <script src="/static/js/comms.js"></script>
 <script src="/static/js/system.js"></script>
+<script src="/static/js/medical.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

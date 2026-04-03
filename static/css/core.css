@@ -24,9 +24,9 @@
   --glow: #ffaa00; --glow-dim: #996600; --glow-bright: #ffcc44;
   --glow-hot: #ffddaa; --border: #3a2a0a;
 }
-.screen[data-module="recreation"] {
-  --glow: #00ccff; --glow-dim: #006688; --glow-bright: #44ddff;
-  --glow-hot: #aaeeff; --border: #0a2a3a;
+.screen[data-module="medical"] {
+  --glow: #ff4444; --glow-dim: #991a1a; --glow-bright: #ff6666;
+  --glow-hot: #ffaaaa; --border: #3a0a0a;
 }
 .screen[data-module="system"] {
   --glow: #cccccc; --glow-dim: #666666; --glow-bright: #eeeeee;
