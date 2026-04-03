@@ -974,6 +974,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/sw.js")
+def service_worker():
+    return send_from_directory("static", "sw.js", mimetype="application/javascript")
+
+
 @app.route("/query", methods=["POST"])
 def query():
     data = request.json
