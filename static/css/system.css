@@ -1,0 +1,194 @@
+/* === SYSTEM MODULE: Status, Admin, PIN Pad === */
+
+#system-info {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
+  font-size: 0.8em;
+  line-height: 1.6;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glow-dim) var(--bg);
+}
+#system-info::-webkit-scrollbar { width: 6px; }
+#system-info::-webkit-scrollbar-track { background: var(--bg); }
+#system-info::-webkit-scrollbar-thumb { background: var(--glow-dim); }
+
+.sys-section {
+  margin-bottom: 16px;
+}
+.sys-section-title {
+  color: var(--glow-bright);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+}
+.sys-row {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+.sys-label {
+  color: var(--glow-dim);
+  min-width: 160px;
+  flex-shrink: 0;
+}
+.sys-value {
+  color: var(--glow);
+}
+
+/* Admin PIN pad */
+.pin-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 20px;
+}
+.pin-display {
+  font-size: 2em;
+  letter-spacing: 12px;
+  color: var(--glow-bright);
+  text-shadow: 0 0 10px var(--glow-dim);
+  margin-bottom: 20px;
+  min-height: 1.4em;
+  text-align: center;
+  min-width: 160px;
+  border-bottom: 2px solid var(--border);
+  padding: 8px 16px;
+}
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  max-width: 240px;
+}
+.pin-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 1.4em;
+  padding: 14px;
+  background: rgba(255,255,255,0.03);
+  color: var(--glow);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.pin-btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--glow-dim);
+}
+.pin-btn:active {
+  background: var(--glow-dim);
+  color: #000;
+}
+.pin-btn.pin-wide {
+  grid-column: span 2;
+}
+.pin-status {
+  margin-top: 12px;
+  font-size: 0.75em;
+  color: var(--red);
+  min-height: 1.2em;
+}
+.pin-label {
+  font-size: 0.7em;
+  color: var(--glow-dim);
+  letter-spacing: 3px;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+/* Admin panel */
+.admin-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+.admin-section {
+  margin-bottom: 20px;
+}
+.admin-section-title {
+  color: var(--glow-bright);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+  letter-spacing: 2px;
+  font-size: 0.85em;
+}
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 500px;
+}
+.admin-form input, .admin-form textarea {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  color: var(--glow);
+  outline: none;
+}
+.admin-form input:focus, .admin-form textarea:focus {
+  border-color: var(--glow-dim);
+}
+.admin-form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+.admin-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75em;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--glow);
+  border: 1px solid var(--glow-dim);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+  align-self: flex-start;
+}
+.admin-btn:hover {
+  background: var(--glow-dim);
+  color: #000;
+}
+.admin-btn.danger {
+  color: var(--red);
+  border-color: var(--red-dim);
+}
+.admin-btn.danger:hover {
+  background: var(--red-dim);
+  color: #fff;
+}
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.user-card .callsign {
+  color: var(--glow-bright);
+  min-width: 100px;
+  letter-spacing: 1px;
+}
+.user-card .key-preview {
+  color: var(--glow-dim);
+  font-size: 0.8em;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-msg {
+  padding: 6px 0;
+  font-size: 0.85em;
+}
+.admin-msg.ok { color: var(--glow); }
+.admin-msg.err { color: var(--red); }
