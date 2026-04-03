@@ -1815,15 +1815,26 @@ async function librarySearch() {
 
 async function startKiwix() {
   const contentDiv = document.getElementById('library-content');
-  contentDiv.innerHTML = '<div class="library-empty"><span class="spinner"></span> STARTING KNOWLEDGE SERVER...</div>';
+  contentDiv.innerHTML = '<div class="library-empty"><span class="spinner"></span> STARTING KNOWLEDGE SERVER...<br><span style="font-size:0.8em;color:var(--glow-dim);">Loading ZIM archives — this may take up to 30 seconds</span></div>';
   try {
     const resp = await fetch('/api/start-kiwix', {method: 'POST'});
     const data = await resp.json();
     if (data.ok) {
-      contentDiv.innerHTML = '<div class="library-empty" style="color:var(--glow);">' + data.message + '<br><br>Refreshing in 3 seconds...</div>';
-      setTimeout(() => showBookList(), 3000);
+      contentDiv.innerHTML = '<div class="library-empty" style="color:var(--glow);">' + esc(data.message) + '<br><br>Loading catalog...</div>';
+      // Poll until kiwix responds, then refresh
+      let attempts = 0;
+      const pollKiwix = async () => {
+        try {
+          const status = await fetch('/api/kiwix-status');
+          const sdata = await status.json();
+          if (sdata.running) { showBookList(); return; }
+        } catch(e) {}
+        if (++attempts < 15) setTimeout(pollKiwix, 2000);
+        else showBookList(); // try anyway
+      };
+      setTimeout(pollKiwix, 2000);
     } else {
-      contentDiv.innerHTML = '<div class="library-empty" style="color:var(--red);">[!] ' + data.message + '</div>';
+      contentDiv.innerHTML = '<div class="library-empty" style="color:var(--red);">[!] ' + esc(data.message) + '</div>';
     }
   } catch(e) {
     contentDiv.innerHTML = '<div class="library-empty" style="color:var(--red);">[!] Failed to start Kiwix: ' + e.message + '</div>';

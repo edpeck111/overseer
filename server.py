@@ -910,22 +910,45 @@ def api_start_kiwix():
     # Find all ZIM files
     zim_files = [os.path.join(zim_dir, f) for f in os.listdir(zim_dir) if f.endswith(".zim")]
     if not zim_files:
-        return {"ok": False, "message": "No ZIM files found"}, 500
+        return {"ok": False, "message": "No ZIM files found in " + zim_dir}, 500
 
     try:
         cmd = [kiwix_exe, "--port", "8080"] + zim_files
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Wait briefly and verify
-        time.sleep(2)
-        try:
-            resp = requests.get(f"{KIWIX_URL}/", timeout=3)
-            if resp.status_code == 200:
-                return {"ok": True, "message": f"Kiwix started with {len(zim_files)} archives"}
-        except Exception:
-            pass
-        return {"ok": True, "message": "Kiwix start command issued, may still be loading"}
+        log_path = os.path.join(base_dir, "kiwix_start.log")
+        log_file = open(log_path, "w")
+        proc = subprocess.Popen(cmd, stdout=log_file, stderr=log_file,
+                                start_new_session=True)
+
+        # Poll for up to 10 seconds (large ZIM collections take time to index)
+        for i in range(10):
+            time.sleep(1)
+            # Check process hasn't died
+            if proc.poll() is not None:
+                log_file.close()
+                with open(log_path) as f:
+                    err_output = f.read()
+                return {"ok": False, "message": f"Kiwix exited (code {proc.returncode}): {err_output[:300]}"}, 500
+            # Check if it's responding
+            try:
+                resp = requests.get(f"{KIWIX_URL}/", timeout=2)
+                if resp.status_code == 200:
+                    return {"ok": True, "message": f"Kiwix started with {len(zim_files)} archives"}
+            except Exception:
+                pass
+
+        return {"ok": True, "message": f"Kiwix starting ({len(zim_files)} archives) — may take a moment to finish loading"}
     except Exception as e:
         return {"ok": False, "message": str(e)}, 500
+
+
+@app.route("/api/kiwix-status")
+def api_kiwix_status():
+    """Check if kiwix is running and responsive."""
+    try:
+        resp = requests.get(f"{KIWIX_URL}/", timeout=3)
+        return {"running": resp.status_code == 200}
+    except Exception:
+        return {"running": False}
 
 
 def build_prompt(query, context_passages):
