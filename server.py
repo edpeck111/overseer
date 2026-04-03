@@ -7,6 +7,8 @@ import requests
 import sqlite3
 import hashlib
 import time
+import platform
+import subprocess
 from flask import Flask, Response, request, render_template, send_from_directory, g
 import os
 
@@ -808,6 +810,47 @@ def admin_unblock():
     return {"ok": True}
 
 
+@app.route("/api/start-kiwix", methods=["POST"])
+def api_start_kiwix():
+    """Start kiwix-serve if not already running."""
+    # Check if already running
+    try:
+        resp = requests.get(f"{KIWIX_URL}/", timeout=3)
+        if resp.status_code == 200:
+            return {"ok": True, "message": "Kiwix already running"}
+    except Exception:
+        pass
+
+    # Try to start it
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    kiwix_bin = "kiwix-serve.exe" if platform.system() == "Windows" else "kiwix-serve"
+    kiwix_exe = os.path.join(base_dir, "kiwix", kiwix_bin)
+    zim_dir = os.path.join(base_dir, "zim")
+
+    if not os.path.isfile(kiwix_exe):
+        return {"ok": False, "message": f"kiwix-serve not found at {kiwix_exe}"}, 500
+
+    # Find all ZIM files
+    zim_files = [os.path.join(zim_dir, f) for f in os.listdir(zim_dir) if f.endswith(".zim")]
+    if not zim_files:
+        return {"ok": False, "message": "No ZIM files found"}, 500
+
+    try:
+        cmd = [kiwix_exe, "--port", "8080"] + zim_files
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Wait briefly and verify
+        time.sleep(2)
+        try:
+            resp = requests.get(f"{KIWIX_URL}/", timeout=3)
+            if resp.status_code == 200:
+                return {"ok": True, "message": f"Kiwix started with {len(zim_files)} archives"}
+        except Exception:
+            pass
+        return {"ok": True, "message": "Kiwix start command issued, may still be loading"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}, 500
+
+
 def build_prompt(query, context_passages):
     """Build the full prompt with retrieved context."""
     if context_passages:
@@ -934,7 +977,6 @@ def boot():
     mem = psutil.virtual_memory()
 
     # Ollama version
-    import subprocess
     ollama_version = "unknown"
     try:
         resp = requests.get(f"{OLLAMA_URL}/api/version", timeout=5)
@@ -946,17 +988,24 @@ def boot():
         except Exception:
             pass
 
-    # Kiwix-serve version
+    # Kiwix-serve version (platform-aware binary name)
     kiwix_version = "unknown"
+    kiwix_bin = "kiwix-serve.exe" if platform.system() == "Windows" else "kiwix-serve"
+    kiwix_exe = os.path.join(os.path.dirname(__file__), "kiwix", kiwix_bin)
     try:
-        kiwix_exe = os.path.join(os.path.dirname(__file__), "kiwix", "kiwix-serve.exe")
         result = subprocess.run([kiwix_exe, "--version"], capture_output=True, text=True, timeout=5)
         for line in result.stdout.strip().split("\n"):
             if line.startswith("kiwix-tools"):
                 kiwix_version = line.strip()
                 break
     except Exception:
-        pass
+        # Try checking if kiwix is reachable on its port instead
+        try:
+            resp = requests.get("http://localhost:8080/", timeout=3)
+            if resp.status_code == 200:
+                kiwix_version = "kiwix-serve (running)"
+        except Exception:
+            pass
 
     # Model info
     try:

@@ -1525,9 +1525,27 @@ if (window.visualViewport) {
 }
 
 // === MODULE SWITCHING ===
+// Module color map for elements outside .screen (e.g. fixed bottom nav)
+const MODULE_COLORS = {
+  knowledge:  { glow: '#33ff33', dim: '#1a8c1a', border: '#1a3a1a' },
+  comms:      { glow: '#ffaa00', dim: '#996600', border: '#3a2a0a' },
+  recreation: { glow: '#00ccff', dim: '#006688', border: '#0a2a3a' },
+  system:     { glow: '#cccccc', dim: '#666666', border: '#2a2a2a' }
+};
+
 function switchModule(name) {
   const screen = document.getElementById('terminal');
   screen.setAttribute('data-module', name);
+
+  // Apply theme to fixed bottom nav
+  const nav = document.querySelector('.module-nav');
+  const colors = MODULE_COLORS[name];
+  if (nav && colors) {
+    nav.style.setProperty('--glow', colors.glow);
+    nav.style.setProperty('--glow-dim', colors.dim);
+    nav.style.setProperty('--border', colors.border);
+    nav.style.borderTopColor = colors.border;
+  }
 
   // Update nav buttons
   document.querySelectorAll('.module-nav button').forEach(btn => btn.classList.remove('active'));
@@ -1743,7 +1761,8 @@ async function showBookList() {
     });
     contentDiv.innerHTML = html;
   } catch(e) {
-    contentDiv.innerHTML = '<div class="library-empty">[!] CATALOG FAILED \u2014 Cannot reach knowledge server.</div>';
+    contentDiv.innerHTML = '<div class="library-empty">[!] CATALOG FAILED \u2014 Cannot reach knowledge server.<br><br>' +
+      '<button onclick="startKiwix()" style="font-family:monospace;padding:10px 20px;min-height:44px;background:transparent;color:var(--glow);border:1px solid var(--glow-dim);cursor:pointer;font-size:14px;">[ START KIWIX ]</button></div>';
   }
 }
 
@@ -1783,7 +1802,25 @@ async function librarySearch() {
     });
     contentDiv.innerHTML = html;
   } catch(e) {
-    contentDiv.innerHTML = '<div class="library-empty">[!] SEARCH FAILED \u2014 Cannot reach knowledge server.</div>';
+    contentDiv.innerHTML = '<div class="library-empty">[!] SEARCH FAILED \u2014 Cannot reach knowledge server.<br><br>' +
+      '<button onclick="startKiwix()" style="font-family:monospace;padding:10px 20px;min-height:44px;background:transparent;color:var(--glow);border:1px solid var(--glow-dim);cursor:pointer;font-size:14px;">[ START KIWIX ]</button></div>';
+  }
+}
+
+async function startKiwix() {
+  const contentDiv = document.getElementById('library-content');
+  contentDiv.innerHTML = '<div class="library-empty"><span class="spinner"></span> STARTING KNOWLEDGE SERVER...</div>';
+  try {
+    const resp = await fetch('/api/start-kiwix', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) {
+      contentDiv.innerHTML = '<div class="library-empty" style="color:var(--glow);">' + data.message + '<br><br>Refreshing in 3 seconds...</div>';
+      setTimeout(() => showBookList(), 3000);
+    } else {
+      contentDiv.innerHTML = '<div class="library-empty" style="color:var(--red);">[!] ' + data.message + '</div>';
+    }
+  } catch(e) {
+    contentDiv.innerHTML = '<div class="library-empty" style="color:var(--red);">[!] Failed to start Kiwix: ' + e.message + '</div>';
   }
 }
 
