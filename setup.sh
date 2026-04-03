@@ -88,7 +88,7 @@ mkdir -p "$ZIM_DIR"
 declare -A ZIMS=(
     # Medical / Reference
     ["mdwiki_en_all_maxi"]="https://download.kiwix.org/zim/mdwiki/mdwiki_en_all_maxi_2025-11.zim"
-    ["wikem_en_all_maxi"]="https://download.kiwix.org/zim/wikem/wikem_en_all_maxi_2021-02.zim"
+    ["wikem_en_all_maxi"]="https://download.kiwix.org/zim/wikem/wikem_en_all_maxi_2024-01.zim"
     ["ifixit_en_all"]="https://download.kiwix.org/zim/ifixit/ifixit_en_all_2025-12.zim"
     ["appropedia_en_all_maxi"]="https://download.kiwix.org/zim/other/appropedia_en_all_maxi_2026-02.zim"
     ["energypedia_en_all_maxi"]="https://download.kiwix.org/zim/other/energypedia_en_all_maxi_2025-12.zim"
@@ -163,48 +163,8 @@ fi
 # ============================================================
 # 7. STARTUP SCRIPTS (Linux)
 # ============================================================
-cat > "$OVERSEER_DIR/start_kiwix.sh" << 'KEOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-KIWIX="$SCRIPT_DIR/kiwix/kiwix-serve"
-ZIM_DIR="$SCRIPT_DIR/zim"
-
-echo "Starting kiwix-serve..."
-ZIMS=$(find "$ZIM_DIR" -name "*.zim" -type f)
-if [ -z "$ZIMS" ]; then
-    echo "No ZIM files found in $ZIM_DIR"
-    exit 1
-fi
-echo "Loading $(echo "$ZIMS" | wc -l) ZIM archives..."
-$KIWIX --port 8080 $ZIMS
-KEOF
+# Ensure startup scripts are executable (they're tracked in git now)
 chmod +x "$OVERSEER_DIR/start_kiwix.sh"
-
-cat > "$OVERSEER_DIR/start_overseer.sh" << 'OEOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# Start Kiwix in background
-echo "Starting Kiwix..."
-"$SCRIPT_DIR/start_kiwix.sh" &
-KIWIX_PID=$!
-sleep 2
-
-# Start Ollama if not running
-if ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
-    echo "Starting Ollama..."
-    ollama serve &
-    sleep 3
-fi
-
-# Start Flask server
-echo "Starting OVERSEER server..."
-cd "$SCRIPT_DIR"
-python3 server.py
-
-# Cleanup on exit
-kill $KIWIX_PID 2>/dev/null
-OEOF
 chmod +x "$OVERSEER_DIR/start_overseer.sh"
 
 # ============================================================
