@@ -6,7 +6,7 @@ echo.
 
 :: Start Kiwix in background
 echo [1/2] Starting knowledge base server...
-start /B "" cmd /c "C:\Source\Home\start_kiwix.bat"
+start /B "" cmd /c "%~dp0start_kiwix.bat"
 timeout /t 3 /nobreak >nul
 
 :: Start Flask server
@@ -15,4 +15,4 @@ echo.
 echo   Open http://localhost:6100 in your browser
 echo   Press Ctrl+C to shut down
 echo.
-"C:\Users\ed\AppData\Local\Programs\Python\Python312\python.exe" C:\Source\Home\server.py
+python "%~dp0server.py"

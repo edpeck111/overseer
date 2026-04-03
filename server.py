@@ -762,6 +762,17 @@ def comms_block_contact():
     return {"ok": True}
 
 
+@app.route("/comms/summary")
+def comms_summary():
+    """Summary data for dashboard."""
+    db = get_db()
+    total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_unread = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE read_at IS NULL"
+    ).fetchone()[0]
+    return {"operators": total_users, "unread": total_unread}
+
+
 @app.route("/admin/blocks")
 def admin_list_blocks():
     """Admin view of all blocks with undelivered message counts."""
