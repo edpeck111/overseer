@@ -1740,7 +1740,8 @@ async function showBookList() {
     const data = await resp.json();
 
     if (data.error) {
-      contentDiv.innerHTML = '<div class="library-empty">[!] ' + esc(data.error) + '</div>';
+      contentDiv.innerHTML = '<div class="library-empty">[!] ' + esc(data.error) + '<br><br>' +
+        '<button onclick="startKiwix()" style="font-family:monospace;padding:10px 20px;min-height:44px;background:transparent;color:var(--glow);border:1px solid var(--glow-dim);cursor:pointer;font-size:14px;">[ START KIWIX ]</button></div>';
       return;
     }
 
@@ -1749,7 +1750,12 @@ async function showBookList() {
       return;
     }
 
-    let html = '<div class="library-result-count">' + data.books.length + ' volumes loaded</div>';
+    let html = '';
+    if (data.warning) {
+      html += '<div class="library-empty" style="padding:8px;margin-bottom:8px;font-size:11px;color:var(--amber);">' + esc(data.warning) +
+        ' <button onclick="startKiwix()" style="font-family:monospace;padding:4px 12px;background:transparent;color:var(--amber);border:1px solid var(--amber-dim);cursor:pointer;font-size:11px;">[ START KIWIX ]</button></div>';
+    }
+    html += '<div class="library-result-count">' + data.books.length + ' volumes loaded</div>';
     data.books.forEach(b => {
       html += '<div class="library-result-item" onclick="openArticle(\'' + b.path.replace(/'/g, "\\'") + '\')">';
       html += '<div class="library-result-title">' + esc(b.title) + '</div>';

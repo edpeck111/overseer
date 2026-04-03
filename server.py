@@ -19,6 +19,42 @@ OLLAMA_URL = "http://localhost:11434"
 KIWIX_URL = "http://localhost:8080"
 MODEL = "qwen2.5:7b-instruct-q4_K_M"
 
+# Human-readable labels for known ZIM archives
+ZIM_CATALOG = {
+    "mdwiki_en_all_maxi": ("Medical Wikipedia", "75,000+ medical articles"),
+    "wikipedia_en_all_nopic": ("Wikipedia (No Images)", "Full English Wikipedia — text only"),
+    "wikipedia_en_all_maxi": ("Wikipedia (Full)", "Full English Wikipedia with images"),
+    "wikibooks_en_all_maxi": ("Wikibooks", "Practical how-to textbooks and manuals"),
+    "wikivoyage_en_all_maxi": ("Wikivoyage", "Travel guides — terrain, climate, regional info"),
+    "ifixit_en_all": ("iFixit", "Repair guides for electronics, vehicles, appliances"),
+    "wikem_en_all": ("WikEM", "Emergency medicine — diagnosis, treatment protocols"),
+    "wikem_en_all_maxi": ("WikEM", "Emergency medicine — diagnosis, treatment protocols"),
+    "appropedia_en_all": ("Appropedia", "Sustainability, appropriate technology, off-grid"),
+    "appropedia_en_all_maxi": ("Appropedia", "Sustainability, appropriate technology, off-grid"),
+    "energypedia_en_all": ("Energypedia", "Off-grid energy — solar, wind, biogas"),
+    "energypedia_en_all_maxi": ("Energypedia", "Off-grid energy — solar, wind, biogas"),
+    "gutenberg_en_lcc-r": ("Gutenberg: Medicine", "Medical texts, field medicine, pharmacology"),
+    "gutenberg_en_lcc-u": ("Gutenberg: Military", "Field manuals, tactics, survival"),
+    "gutenberg_en_lcc-v": ("Gutenberg: Naval", "Navigation, seamanship, maritime survival"),
+    "cooking.stackexchange": ("SE: Cooking", "Food preparation, preservation"),
+    "diy.stackexchange": ("SE: DIY", "Home repair, plumbing, electrical"),
+    "outdoors.stackexchange": ("SE: Outdoors", "Wilderness survival, camping, navigation"),
+    "mechanics.stackexchange": ("SE: Mechanics", "Vehicle repair, diagnostics"),
+    "gardening.stackexchange": ("SE: Gardening", "Growing food, soil, pest control"),
+    "ham.stackexchange": ("SE: Ham Radio", "Amateur radio, antennas, emergency comms"),
+    "electronics.stackexchange": ("SE: Electronics", "Circuit design, repair, solar, Arduino"),
+    "woodworking.stackexchange": ("SE: Woodworking", "Tools, joinery, construction"),
+    "homebrew.stackexchange": ("SE: Homebrew", "Brewing, fermentation, water treatment"),
+}
+
+def get_zim_label(filename):
+    """Get human-readable label and description for a ZIM file."""
+    base = filename.replace(".zim", "")
+    for key, (label, desc) in ZIM_CATALOG.items():
+        if key in base:
+            return label, desc
+    return base.replace("_", " ").title(), "Uncatalogued archive"
+
 SYSTEM_PROMPT = """You are O.V.E.R.S.E.E.R. — Offline Vault of Essential Records for Survival, Emergency & Endurance Response.
 A hardened survival intelligence system built before the collapse.
 You run on salvaged hardware in a reinforced bunker. You have access to archived pre-war knowledge
@@ -158,11 +194,10 @@ def serve_sound(filename):
 
 @app.route("/library/books")
 def library_books():
-    """List all loaded ZIM books from Kiwix OPDS catalog."""
-    import re
+    """List all loaded ZIM books from Kiwix OPDS catalog with local fallback."""
     import xml.etree.ElementTree as ET
 
-    # Also build info from local ZIM files for descriptions
+    # Build local ZIM file info as fallback
     zim_dir = os.path.join(os.path.dirname(__file__), "zim")
     local_zims = {}
     if os.path.isdir(zim_dir):
@@ -171,37 +206,49 @@ def library_books():
                 size_gb = round(os.path.getsize(os.path.join(zim_dir, f)) / (1024**3), 2)
                 local_zims[f] = size_gb
 
-    try:
-        resp = requests.get(f"{KIWIX_URL}/catalog/v2/entries?count=100", timeout=10)
-        if resp.status_code != 200:
-            return {"books": [], "error": "Catalog unavailable"}
+    # Try multiple catalog endpoints (different kiwix versions use different paths)
+    catalog_urls = [
+        f"{KIWIX_URL}/catalog/v2/entries?count=100",
+        f"{KIWIX_URL}/catalog/search?count=100",
+        f"{KIWIX_URL}/catalog/v2/illustration",
+    ]
 
-        # Parse OPDS XML
-        root = ET.fromstring(resp.text)
-        ns = {
-            'atom': 'http://www.w3.org/2005/Atom',
-            'dc': 'http://purl.org/dc/terms/',
-        }
+    for catalog_url in catalog_urls:
+        try:
+            resp = requests.get(catalog_url, timeout=10)
+            if resp.status_code != 200:
+                continue
 
-        books = []
-        for entry in root.findall('atom:entry', ns):
-            title_el = entry.find('atom:title', ns)
-            summary_el = entry.find('atom:summary', ns)
-            article_count_el = entry.find('atom:articleCount', ns)
+            # Parse OPDS XML
+            root = ET.fromstring(resp.text)
+            ns = {
+                'atom': 'http://www.w3.org/2005/Atom',
+                'dc': 'http://purl.org/dc/terms/',
+            }
 
-            # Get the content link (the actual URL path Kiwix uses)
-            content_path = ""
-            for link in entry.findall('atom:link', ns):
-                href = link.get('href', '')
-                if href.startswith('/content/'):
-                    content_path = href
-                    break
+            books = []
+            for entry in root.findall('atom:entry', ns):
+                title_el = entry.find('atom:title', ns)
+                summary_el = entry.find('atom:summary', ns)
+                article_count_el = entry.find('atom:articleCount', ns)
 
-            title = title_el.text if title_el is not None else "Unknown"
-            summary = summary_el.text if summary_el is not None else ""
-            article_count = article_count_el.text if article_count_el is not None else ""
+                # Get the content link (the actual URL path Kiwix uses)
+                content_path = ""
+                for link in entry.findall('atom:link', ns):
+                    href = link.get('href', '')
+                    if href.startswith('/content/') or href.startswith('/viewer#/'):
+                        content_path = href
+                        break
+                # Fallback: try the entry ID as path
+                if not content_path:
+                    id_el = entry.find('atom:id', ns)
+                    if id_el is not None and id_el.text:
+                        content_path = f"/viewer#/{id_el.text}"
 
-            if content_path:
+                title = title_el.text if title_el is not None else "Unknown"
+                summary = summary_el.text if summary_el is not None else ""
+                article_count = article_count_el.text if article_count_el is not None else ""
+
                 books.append({
                     "path": content_path,
                     "title": title,
@@ -209,11 +256,41 @@ def library_books():
                     "articles": article_count,
                 })
 
-        return {"books": books}
-    except requests.ConnectionError:
+            if books:
+                return {"books": books}
+        except (requests.ConnectionError, requests.Timeout):
+            # Kiwix not reachable — fall through to local fallback
+            break
+        except ET.ParseError:
+            continue
+
+    # Fallback: list local ZIM files even if kiwix catalog fails
+    if local_zims:
+        books = []
+        for filename, size_gb in local_zims.items():
+            label, desc = get_zim_label(filename)
+            books.append({
+                "path": "",
+                "title": label,
+                "summary": f"{desc} ({size_gb} GB)" if desc else f"{size_gb} GB",
+                "articles": "",
+                "offline": True,
+            })
+        kiwix_running = False
+        try:
+            requests.get(f"{KIWIX_URL}/", timeout=3)
+            kiwix_running = True
+        except Exception:
+            pass
+        warning = "" if kiwix_running else "Kiwix server not running \u2014 browsing limited to file list. "
+        return {"books": books, "warning": warning + "Catalog could not be parsed."}
+
+    # Nothing at all
+    try:
+        requests.get(f"{KIWIX_URL}/", timeout=3)
+        return {"books": [], "error": "Kiwix running but no ZIM archives loaded"}
+    except Exception:
         return {"books": [], "error": "Kiwix server unreachable"}
-    except ET.ParseError:
-        return {"books": [], "error": "Failed to parse catalog"}
 
 
 @app.route("/library/search")
@@ -1021,46 +1098,7 @@ def boot():
     except Exception:
         model_info = []
 
-    # ZIM file info with human-readable names
-    ZIM_CATALOG = {
-        # Wikimedia
-        "mdwiki_en_all_maxi": ("Medical Wikipedia", "75,000+ medical articles — diseases, drugs, anatomy, first aid"),
-        "wikipedia_en_all_nopic": ("Wikipedia (No Images)", "Full English Wikipedia — text only, all articles"),
-        "wikipedia_en_all_maxi": ("Wikipedia (Full)", "Full English Wikipedia with images"),
-        "wikibooks_en_all_maxi": ("Wikibooks", "Practical how-to textbooks and manuals"),
-        "wikivoyage_en_all_maxi": ("Wikivoyage", "Travel guides — terrain, climate, regional survival info"),
-        # Reference
-        "ifixit_en_all": ("iFixit", "Repair guides for electronics, vehicles, appliances"),
-        "wikem_en_all": ("WikEM", "Emergency medicine encyclopedia — diagnosis, treatment protocols"),
-        "appropedia_en_all": ("Appropedia", "Sustainability, appropriate technology, off-grid systems"),
-        "energypedia_en_all": ("Energypedia", "Off-grid energy — solar, wind, biogas, micro-hydro"),
-        "phet_en_all": ("PhET Simulations", "Interactive science simulations — physics, chemistry, biology"),
-        # Gutenberg subject splits
-        "gutenberg_en_lcc-s": ("Gutenberg: Agriculture", "Farming, livestock, food production, horticulture"),
-        "gutenberg_en_lcc-t": ("Gutenberg: Technology", "Engineering, manufacturing, construction, trades"),
-        "gutenberg_en_lcc-r": ("Gutenberg: Medicine", "Medical texts, field medicine, anatomy, pharmacology"),
-        "gutenberg_en_lcc-u": ("Gutenberg: Military", "Field manuals, tactics, fortification, survival"),
-        "gutenberg_en_lcc-v": ("Gutenberg: Naval", "Navigation, seamanship, maritime survival"),
-        "gutenberg_en_lcc-g": ("Gutenberg: Geography", "Maps, anthropology, outdoor recreation, exploration"),
-        "gutenberg_en_all": ("Project Gutenberg (Full)", "70,000+ public domain books — all subjects"),
-        # Stack Exchange
-        "cooking.stackexchange": ("SE: Cooking", "Food preparation, preservation, substitutions"),
-        "diy.stackexchange": ("SE: DIY", "Home repair, plumbing, electrical, construction"),
-        "outdoors.stackexchange": ("SE: Outdoors", "Wilderness survival, camping, hiking, navigation"),
-        "mechanics.stackexchange": ("SE: Mechanics", "Vehicle repair, maintenance, diagnostics"),
-        "gardening.stackexchange": ("SE: Gardening", "Growing food, soil management, pest control"),
-        "ham.stackexchange": ("SE: Ham Radio", "Amateur radio, antennas, emergency comms"),
-        "electronics.stackexchange": ("SE: Electronics", "Circuit design, repair, solar, Arduino, sensors"),
-        "woodworking.stackexchange": ("SE: Woodworking", "Tools, joinery, construction, furniture"),
-        "homebrew.stackexchange": ("SE: Homebrew", "Brewing, fermentation, water treatment"),
-    }
-
-    def get_zim_label(filename):
-        for key, (label, desc) in ZIM_CATALOG.items():
-            if key in filename:
-                return label, desc
-        return filename.replace(".zim", "").replace("_", " ").title(), "Uncatalogued archive"
-
+    # ZIM file info — uses module-level ZIM_CATALOG and get_zim_label()
     zim_dir = os.path.join(os.path.dirname(__file__), "zim")
     zim_files = []
     if os.path.isdir(zim_dir):
