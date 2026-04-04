@@ -2,6 +2,10 @@
 
 let mapsInitialized = false;
 let mapsWaypoints = [];
+let leafletMap = null;
+let leafletReady = false;
+let leafletMarkers = [];
+let mapTilesAvailable = false;
 
 const MAP_CATEGORIES = [
   { id: 'camp',    label: 'CAMP',        icon: '^' },
@@ -26,7 +30,9 @@ function switchMapsTab(tab) {
   document.getElementById('mtab-' + tab).classList.add('active');
   document.getElementById('maps-waypoints-panel').style.display = tab === 'waypoints' ? 'flex' : 'none';
   document.getElementById('maps-navigate-panel').style.display = tab === 'navigate' ? 'flex' : 'none';
+  document.getElementById('maps-view-panel').style.display = tab === 'map' ? 'flex' : 'none';
   if (tab === 'navigate') mapsPopulateNavSelects();
+  if (tab === 'map') mapsInitLeaflet();
 }
 
 // === WAYPOINTS ===
@@ -270,3 +276,174 @@ function mapsCardinal(deg) {
   const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   return dirs[Math.round(deg / 22.5) % 16];
 }
+
+// === LEAFLET MAP VIEW ===
+const MAP_CAT_COLORS = {
+  camp: '#33ff33', water: '#00ccff', cache: '#ffaa00', hazard: '#ff4444',
+  rally: '#ff44ff', medical: '#ff4444', comms: '#ffaa00', general: '#cccccc'
+};
+
+function mapsLoadLeafletAssets() {
+  return new Promise((resolve, reject) => {
+    if (typeof L !== 'undefined') { resolve(); return; }
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = '/static/lib/leaflet/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = '/static/lib/leaflet/leaflet.js';
+    js.onload = resolve;
+    js.onerror = reject;
+    document.body.appendChild(js);
+  });
+}
+
+async function mapsInitLeaflet() {
+  const container = document.getElementById('maps-leaflet-map');
+  const status = document.getElementById('maps-map-status');
+
+  if (leafletMap) {
+    leafletMap.invalidateSize();
+    mapsPlotWaypoints();
+    return;
+  }
+
+  status.textContent = 'LOADING MAP ENGINE...';
+
+  try {
+    await mapsLoadLeafletAssets();
+  } catch (e) {
+    status.textContent = '[!] FAILED TO LOAD MAP ENGINE';
+    return;
+  }
+
+  // Check tile availability
+  let tileInfo;
+  try {
+    const resp = await fetch('/maps/tile-info');
+    tileInfo = await resp.json();
+  } catch (e) {
+    tileInfo = { available: false };
+  }
+
+  mapTilesAvailable = tileInfo.available;
+
+  // Default to UK center
+  let initLat = 54.5, initLon = -2.0, initZoom = 6;
+  let minZoom = 0, maxZoom = 14;
+
+  if (tileInfo.available && tileInfo.center) {
+    const parts = tileInfo.center.split(',');
+    if (parts.length >= 3) {
+      initLon = parseFloat(parts[0]);
+      initLat = parseFloat(parts[1]);
+      initZoom = parseInt(parts[2]);
+    }
+    minZoom = tileInfo.minzoom || 0;
+    maxZoom = tileInfo.maxzoom || 14;
+  }
+
+  status.style.display = 'none';
+  container.style.display = 'block';
+
+  leafletMap = L.map(container, {
+    center: [initLat, initLon],
+    zoom: initZoom,
+    minZoom: minZoom,
+    maxZoom: maxZoom,
+    zoomControl: true,
+    attributionControl: false
+  });
+
+  if (mapTilesAvailable) {
+    L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+      maxZoom: maxZoom,
+      minZoom: minZoom,
+      tileSize: 256
+    }).addTo(leafletMap);
+  } else {
+    // No tiles — show grid overlay as placeholder
+    container.insertAdjacentHTML('beforeend',
+      '<div class="maps-no-tiles">NO TILE DATA<br>Place .mbtiles file in tiles/ directory</div>');
+  }
+
+  // Right-click / long-press to add waypoint at location
+  leafletMap.on('contextmenu', function(e) {
+    mapsMapAddAt(e.latlng.lat, e.latlng.lng);
+  });
+
+  // Show coordinates on click
+  leafletMap.on('click', function(e) {
+    const coord = document.getElementById('maps-map-coord');
+    coord.textContent = e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
+  });
+
+  leafletReady = true;
+  mapsPlotWaypoints();
+}
+
+function mapsPlotWaypoints() {
+  if (!leafletMap || !leafletReady) return;
+
+  // Clear existing markers
+  leafletMarkers.forEach(m => leafletMap.removeLayer(m));
+  leafletMarkers = [];
+
+  mapsWaypoints.forEach(wp => {
+    const color = MAP_CAT_COLORS[wp.category] || '#cccccc';
+    const cat = MAP_CATEGORIES.find(c => c.id === wp.category) || MAP_CATEGORIES[7];
+    const marker = L.circleMarker([wp.lat, wp.lon], {
+      radius: 8,
+      fillColor: color,
+      color: color,
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: 0.5
+    }).addTo(leafletMap);
+
+    marker.bindPopup(
+      '<div style="font-family:monospace;color:#000;font-size:12px;">' +
+      '<b>' + esc(cat.icon) + ' ' + esc(wp.name) + '</b><br>' +
+      esc(cat.label) + '<br>' +
+      wp.lat.toFixed(6) + ', ' + wp.lon.toFixed(6) +
+      (wp.notes ? '<br><i>' + esc(wp.notes) + '</i>' : '') +
+      '</div>'
+    );
+
+    leafletMarkers.push(marker);
+  });
+}
+
+function mapsMapLocate() {
+  if (!leafletMap) return;
+  const status = document.getElementById('maps-map-coord');
+  status.textContent = 'ACQUIRING GPS...';
+  leafletMap.locate({ setView: true, maxZoom: 14, enableHighAccuracy: true });
+  leafletMap.once('locationfound', function(e) {
+    status.textContent = e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6) +
+      (e.accuracy ? ' (\u00B1' + Math.round(e.accuracy) + 'm)' : '');
+    L.circleMarker(e.latlng, {
+      radius: 10, fillColor: '#00ccff', color: '#00ffff', weight: 3, opacity: 1, fillOpacity: 0.3
+    }).addTo(leafletMap).bindPopup('YOUR POSITION').openPopup();
+  });
+  leafletMap.once('locationerror', function() {
+    status.textContent = '[!] GPS FAILED';
+  });
+}
+
+function mapsMapAddAt(lat, lon) {
+  // Switch to waypoints tab with coords pre-filled
+  switchMapsTab('waypoints');
+  const form = document.getElementById('maps-add-form');
+  form.style.display = 'flex';
+  document.getElementById('wp-lat').value = lat.toFixed(6);
+  document.getElementById('wp-lon').value = lon.toFixed(6);
+  document.getElementById('wp-name').focus();
+}
+
+// Re-plot markers when waypoints change
+const _origMapsLoadWaypoints = mapsLoadWaypoints;
+mapsLoadWaypoints = async function() {
+  await _origMapsLoadWaypoints();
+  mapsPlotWaypoints();
+};

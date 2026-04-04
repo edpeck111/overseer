@@ -14,6 +14,12 @@ const STATIC_ASSETS = [
   '/static/js/comms.js',
   '/static/js/system.js',
   '/static/js/medical.js',
+  '/static/js/maps.js',
+  '/static/js/power.js',
+  '/static/css/maps.css',
+  '/static/css/power.css',
+  '/static/lib/leaflet/leaflet.js',
+  '/static/lib/leaflet/leaflet.css',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
@@ -48,6 +54,9 @@ self.addEventListener('fetch', event => {
       url.pathname.startsWith('/admin/') ||
       url.pathname.startsWith('/comms/') ||
       url.pathname.startsWith('/library/') ||
+      url.pathname.startsWith('/maps/') ||
+      url.pathname.startsWith('/tiles/') ||
+      url.pathname.startsWith('/power/') ||
       url.pathname.startsWith('/status') ||
       url.pathname.startsWith('/boot') ||
       url.pathname.startsWith('/sounds/')) {

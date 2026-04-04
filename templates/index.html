@@ -307,6 +307,7 @@
     <div class="maps-tabs">
       <button class="maps-tab-btn active" onclick="switchMapsTab('waypoints')" id="mtab-waypoints">WAYPOINTS</button>
       <button class="maps-tab-btn" onclick="switchMapsTab('navigate')" id="mtab-navigate">NAVIGATE</button>
+      <button class="maps-tab-btn" onclick="switchMapsTab('map')" id="mtab-map">MAP</button>
     </div>
 
     <!-- WAYPOINTS PANEL -->
@@ -377,6 +378,19 @@
         </div>
 
         <div id="maps-nav-result"></div>
+      </div>
+    </div>
+
+    <!-- MAP VIEW PANEL -->
+    <div id="maps-view-panel" class="maps-view-panel" style="display:none;">
+      <div class="maps-map-container">
+        <div class="maps-map-status" id="maps-map-status">TAP TO LOAD MAP</div>
+        <div id="maps-leaflet-map"></div>
+      </div>
+      <div class="maps-map-toolbar">
+        <button class="admin-btn" onclick="mapsMapLocate()">LOCATE</button>
+        <button class="admin-btn" onclick="if(leafletMap){leafletMap.setView([54.5,-2.0],6);}">UK VIEW</button>
+        <span class="maps-map-coord" id="maps-map-coord">RIGHT-CLICK MAP TO ADD WAYPOINT</span>
       </div>
     </div>
   </div>

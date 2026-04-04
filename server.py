@@ -975,6 +975,69 @@ def maps_navigate():
 
 
 # ============================================================
+# TILE SERVER (MBTiles)
+# ============================================================
+
+TILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiles")
+
+def _get_mbtiles_path():
+    """Find the first .mbtiles file in the tiles directory."""
+    if not os.path.isdir(TILES_DIR):
+        return None
+    for f in os.listdir(TILES_DIR):
+        if f.endswith(".mbtiles"):
+            return os.path.join(TILES_DIR, f)
+    return None
+
+
+@app.route("/tiles/<int:z>/<int:x>/<int:y>.png")
+def serve_tile(z, x, y):
+    """Serve a map tile from MBTiles (SQLite). Converts from XYZ to TMS y-flip."""
+    mbtiles_path = _get_mbtiles_path()
+    if not mbtiles_path:
+        return "", 404
+    tms_y = (2 ** z - 1) - y
+    try:
+        conn = sqlite3.connect(f"file:{mbtiles_path}?mode=ro", uri=True)
+        cur = conn.execute(
+            "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
+            (z, x, tms_y),
+        )
+        row = cur.fetchone()
+        conn.close()
+        if row is None:
+            return "", 404
+        return Response(row[0], mimetype="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    except Exception:
+        return "", 404
+
+
+@app.route("/maps/tile-info")
+def maps_tile_info():
+    """Return MBTiles metadata: bounds, center, zoom range, name."""
+    mbtiles_path = _get_mbtiles_path()
+    if not mbtiles_path:
+        return {"available": False}
+    try:
+        conn = sqlite3.connect(f"file:{mbtiles_path}?mode=ro", uri=True)
+        rows = conn.execute("SELECT name, value FROM metadata").fetchall()
+        conn.close()
+        meta = {r[0]: r[1] for r in rows}
+        return {
+            "available": True,
+            "name": meta.get("name", "Unknown"),
+            "format": meta.get("format", "png"),
+            "bounds": meta.get("bounds", "-180,-85,180,85"),
+            "center": meta.get("center", "0,0,2"),
+            "minzoom": int(meta.get("minzoom", 0)),
+            "maxzoom": int(meta.get("maxzoom", 14)),
+        }
+    except Exception:
+        return {"available": False}
+
+
+# ============================================================
 # POWER API
 # ============================================================
 
