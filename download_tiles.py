@@ -10,6 +10,7 @@ import math
 import sys
 import os
 import time
+import signal
 
 WEST, SOUTH, EAST, NORTH = -10.5, 49.5, 2.0, 61.0
 MIN_ZOOM, MAX_ZOOM = 0, 14
@@ -109,6 +110,33 @@ def main():
     start_time = time.time()
     server_idx = 0
     batch = []
+    interrupted = False
+
+    def flush_and_exit(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+        print()
+        print()
+        print("[!] Ctrl+C — saving progress...")
+        if batch:
+            db.executemany(
+                "INSERT OR REPLACE INTO tiles "
+                "(zoom_level, tile_column, tile_row, tile_data) "
+                "VALUES (?, ?, ?, ?)",
+                batch,
+            )
+            db.commit()
+            print(f"    Flushed {len(batch)} pending tiles.")
+        total_in_db = db.execute("SELECT COUNT(*) FROM tiles").fetchone()[0]
+        db.close()
+        elapsed = time.time() - start_time
+        print(f"    Saved {downloaded:,} new tiles this session ({int(elapsed // 60)}m {int(elapsed % 60)}s)")
+        print(f"    Total in DB: {total_in_db:,}/{total:,}")
+        print()
+        print("    Run again to resume.")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, flush_and_exit)
 
     for z in range(MIN_ZOOM, MAX_ZOOM + 1):
         x_min = max(0, lon_to_tile(WEST, z))
@@ -151,8 +179,8 @@ def main():
                         else:
                             time.sleep(1)
 
-                # Batch insert every 100 tiles
-                if len(batch) >= 100:
+                # Batch insert every 25 tiles
+                if len(batch) >= 25:
                     db.executemany(
                         "INSERT OR REPLACE INTO tiles "
                         "(zoom_level, tile_column, tile_row, tile_data) "
