@@ -532,6 +532,15 @@ def init_db():
             updated_at REAL NOT NULL,
             PRIMARY KEY (user_id, contact_id)
         );
+        CREATE TABLE IF NOT EXISTS map_waypoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            category TEXT NOT NULL DEFAULT 'general',
+            notes TEXT DEFAULT '',
+            created_at REAL NOT NULL
+        );
     """)
     # Set default PIN if not exists
     cur = db.execute("SELECT value FROM settings WHERE key = 'admin_pin'")
@@ -885,6 +894,138 @@ def admin_unblock():
     )
     db.commit()
     return {"ok": True}
+
+
+# ============================================================
+# MAPS API
+# ============================================================
+
+import math
+
+@app.route("/maps/waypoints")
+def maps_list_waypoints():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name, lat, lon, category, notes, created_at FROM map_waypoints ORDER BY created_at DESC"
+    ).fetchall()
+    return {"waypoints": [dict(r) for r in rows]}
+
+
+@app.route("/maps/waypoints", methods=["POST"])
+def maps_create_waypoint():
+    data = request.json
+    name = (data.get("name") or "").strip()
+    if not name:
+        return {"error": "Name required"}, 400
+    try:
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "Valid lat/lon required"}, 400
+    category = data.get("category", "general").strip() or "general"
+    notes = data.get("notes", "").strip()
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO map_waypoints (name, lat, lon, category, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, lat, lon, category, notes, time.time()),
+    )
+    db.commit()
+    return {"ok": True, "id": cur.lastrowid}
+
+
+@app.route("/maps/waypoints/<int:wp_id>", methods=["DELETE"])
+def maps_delete_waypoint(wp_id):
+    db = get_db()
+    db.execute("DELETE FROM map_waypoints WHERE id = ?", (wp_id,))
+    db.commit()
+    return {"ok": True}
+
+
+@app.route("/maps/navigate", methods=["POST"])
+def maps_navigate():
+    """Calculate distance and bearing between two coordinates using Haversine."""
+    data = request.json
+    try:
+        lat1, lon1 = float(data["lat1"]), float(data["lon1"])
+        lat2, lon2 = float(data["lat2"]), float(data["lon2"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "Requires lat1, lon1, lat2, lon2"}, 400
+
+    R = 6371.0  # Earth radius in km
+    rlat1, rlat2 = math.radians(lat1), math.radians(lat2)
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    distance_km = round(R * c, 2)
+    distance_mi = round(distance_km * 0.621371, 2)
+
+    # Bearing
+    x = math.sin(dlon) * math.cos(rlat2)
+    y = math.cos(rlat1) * math.sin(rlat2) - math.sin(rlat1) * math.cos(rlat2) * math.cos(dlon)
+    bearing = (math.degrees(math.atan2(x, y)) + 360) % 360
+
+    return {
+        "distance_km": distance_km,
+        "distance_mi": distance_mi,
+        "bearing_deg": round(bearing, 1),
+        "from": {"lat": lat1, "lon": lon1},
+        "to": {"lat": lat2, "lon": lon2},
+    }
+
+
+# ============================================================
+# POWER API
+# ============================================================
+
+@app.route("/power/status")
+def power_status():
+    import psutil
+
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+
+    # CPU temp — try psutil sensors, fallback to /sys/class/thermal
+    cpu_temp = None
+    try:
+        temps = psutil.sensors_temperatures()
+        if temps:
+            for name, entries in temps.items():
+                if entries:
+                    cpu_temp = round(entries[0].current, 1)
+                    break
+    except Exception:
+        pass
+    if cpu_temp is None:
+        try:
+            with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                cpu_temp = round(int(f.read().strip()) / 1000.0, 1)
+        except Exception:
+            cpu_temp = None
+
+    # CPU usage (non-blocking, 0.0 on first call)
+    cpu_percent = psutil.cpu_percent(interval=0)
+
+    # Uptime
+    import datetime
+    boot_time = psutil.boot_time()
+    uptime_sec = time.time() - boot_time
+    uptime_h = int(uptime_sec // 3600)
+    uptime_m = int((uptime_sec % 3600) // 60)
+    uptime_str = f"{uptime_h}h {uptime_m}m"
+
+    return {
+        "cpu_temp_c": cpu_temp,
+        "cpu_percent": cpu_percent,
+        "ram_total_gb": round(mem.total / (1024**3), 1),
+        "ram_used_gb": round(mem.used / (1024**3), 1),
+        "ram_percent": mem.percent,
+        "disk_total_gb": round(disk.total / (1024**3), 1),
+        "disk_used_gb": round(disk.used / (1024**3), 1),
+        "disk_percent": disk.percent,
+        "uptime_hours": uptime_h,
+        "uptime_str": uptime_str,
+    }
 
 
 @app.route("/api/start-kiwix", methods=["POST"])

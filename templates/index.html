@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="/static/css/comms.css">
 <link rel="stylesheet" href="/static/css/system.css">
 <link rel="stylesheet" href="/static/css/medical.css">
+<link rel="stylesheet" href="/static/css/maps.css">
+<link rel="stylesheet" href="/static/css/power.css">
 </head>
 <body>
 <!-- SPLASH / BOOT SCREEN -->
@@ -98,6 +100,12 @@
     </button>
     <button onclick="switchModule('medical')" id="nav-medical">
       <span class="nav-indicator"></span>MEDICAL
+    </button>
+    <button onclick="switchModule('maps')" id="nav-maps">
+      <span class="nav-indicator"></span>MAPS
+    </button>
+    <button onclick="switchModule('power')" id="nav-power">
+      <span class="nav-indicator"></span>POWER
     </button>
     <button onclick="switchModule('system')" id="nav-system">
       <span class="nav-indicator"></span>SYSTEM
@@ -294,6 +302,95 @@
     </div>
   </div>
 
+  <!-- ==================== MAPS MODULE ==================== -->
+  <div id="module-maps" class="module-panel">
+    <div class="maps-tabs">
+      <button class="maps-tab-btn active" onclick="switchMapsTab('waypoints')" id="mtab-waypoints">WAYPOINTS</button>
+      <button class="maps-tab-btn" onclick="switchMapsTab('navigate')" id="mtab-navigate">NAVIGATE</button>
+    </div>
+
+    <!-- WAYPOINTS PANEL -->
+    <div id="maps-waypoints-panel" class="maps-panel" style="display:flex;">
+      <div class="maps-add-bar">
+        <button class="admin-btn" onclick="mapsShowAddForm()">+ ADD WAYPOINT</button>
+        <button class="admin-btn" onclick="mapsLoadWaypoints()">REFRESH</button>
+      </div>
+
+      <div id="maps-add-form" class="maps-add-form" style="display:none;">
+        <input type="text" id="wp-name" placeholder="WAYPOINT NAME" autocomplete="off" spellcheck="false">
+        <select id="wp-category">
+          <option value="camp">CAMP</option>
+          <option value="water">WATER</option>
+          <option value="cache">CACHE</option>
+          <option value="hazard">HAZARD</option>
+          <option value="rally">RALLY POINT</option>
+          <option value="medical">MEDICAL</option>
+          <option value="comms">COMMS</option>
+          <option value="general" selected>GENERAL</option>
+        </select>
+        <div class="maps-coord-row">
+          <input type="text" id="wp-lat" placeholder="LATITUDE" autocomplete="off">
+          <input type="text" id="wp-lon" placeholder="LONGITUDE" autocomplete="off">
+        </div>
+        <textarea id="wp-notes" placeholder="NOTES (optional)"></textarea>
+        <div class="maps-add-actions">
+          <button class="admin-btn" onclick="mapsAddWaypoint()">SAVE</button>
+          <button class="admin-btn" onclick="mapsGetPosition()">GPS POSITION</button>
+          <span class="maps-gps-msg" id="maps-gps-msg"></span>
+        </div>
+        <div class="maps-add-msg" id="maps-add-msg"></div>
+      </div>
+
+      <div id="maps-wp-list" class="maps-wp-list">Loading waypoints...</div>
+    </div>
+
+    <!-- NAVIGATE PANEL -->
+    <div id="maps-navigate-panel" class="maps-panel" style="display:none;">
+      <div class="maps-nav-scroll">
+        <div class="maps-nav-section">
+          <div class="maps-nav-section-title">FROM</div>
+          <div class="maps-nav-coord-inputs">
+            <select id="nav-from-select" onchange="mapsNavSelectFrom()"><option value="">-- MANUAL --</option></select>
+          </div>
+          <div class="maps-nav-coord-inputs" style="margin-top:4px;">
+            <input type="text" id="nav-lat1" placeholder="LATITUDE">
+            <input type="text" id="nav-lon1" placeholder="LONGITUDE">
+            <button class="admin-btn" onclick="mapsNavGetPos('1')" style="flex-shrink:0;">GPS</button>
+          </div>
+        </div>
+
+        <div class="maps-nav-section">
+          <div class="maps-nav-section-title">TO</div>
+          <div class="maps-nav-coord-inputs">
+            <select id="nav-to-select" onchange="mapsNavSelectTo()"><option value="">-- MANUAL --</option></select>
+          </div>
+          <div class="maps-nav-coord-inputs" style="margin-top:4px;">
+            <input type="text" id="nav-lat2" placeholder="LATITUDE">
+            <input type="text" id="nav-lon2" placeholder="LONGITUDE">
+            <button class="admin-btn" onclick="mapsNavGetPos('2')" style="flex-shrink:0;">GPS</button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center; padding:8px 0;">
+          <button class="admin-btn" onclick="mapsCalculateRoute()">CALCULATE</button>
+          <span class="maps-nav-msg" id="maps-nav-msg"></span>
+        </div>
+
+        <div id="maps-nav-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== POWER MODULE ==================== -->
+  <div id="module-power" class="module-panel">
+    <div class="power-vitals" id="power-vitals">
+      <div class="power-section">
+        <div class="power-section-title">--- LOADING ---</div>
+        <div class="power-row">Querying host system...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== SYSTEM MODULE ==================== -->
   <div id="module-system" class="module-panel">
     <div class="knowledge-tabs">
@@ -384,6 +481,8 @@
 <script src="/static/js/comms.js"></script>
 <script src="/static/js/system.js"></script>
 <script src="/static/js/medical.js"></script>
+<script src="/static/js/maps.js"></script>
+<script src="/static/js/power.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
