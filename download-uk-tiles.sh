@@ -33,17 +33,15 @@ echo "Est. size: 8-15 GB"
 echo ""
 
 if [ -f "$MBTILES_OUTPUT" ]; then
-    echo "[!] $MBTILES_OUTPUT already exists."
-    read -p "Overwrite? (y/N): " confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        echo "Aborted."
-        exit 0
-    fi
-    rm -f "$MBTILES_OUTPUT"
+    SIZE=$(du -h "$MBTILES_OUTPUT" | cut -f1)
+    echo "[*] Existing file found: $MBTILES_OUTPUT ($SIZE)"
+    echo "[*] Will RESUME — skipping already-downloaded tiles."
+    echo ""
 fi
 
 echo "Starting download..."
 echo "(This will take a long time — zoom 0-14 is millions of tiles)"
+echo "(Safe to Ctrl+C and resume later)"
 echo ""
 
 python3 "$SCRIPT_DIR/download_tiles.py"

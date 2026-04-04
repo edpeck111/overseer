@@ -46,6 +46,8 @@ def main():
     print(f"Output: {OUTPUT}")
     print()
 
+    resuming = os.path.exists(OUTPUT)
+
     # Create MBTiles database
     db = sqlite3.connect(OUTPUT)
     db.execute("PRAGMA journal_mode=WAL")
@@ -57,21 +59,42 @@ def main():
         CREATE UNIQUE INDEX IF NOT EXISTS tile_index
             ON tiles (zoom_level, tile_column, tile_row);
     """)
-    db.executemany("INSERT INTO metadata (name, value) VALUES (?, ?)", [
-        ("name", "United Kingdom"),
-        ("format", "png"),
-        ("bounds", f"{WEST},{SOUTH},{EAST},{NORTH}"),
-        ("center", f"{(WEST + EAST) / 2},{(SOUTH + NORTH) / 2},6"),
-        ("minzoom", str(MIN_ZOOM)),
-        ("maxzoom", str(MAX_ZOOM)),
-        ("type", "baselayer"),
-        ("attribution", "OpenStreetMap contributors"),
-    ])
-    db.commit()
+
+    # Only insert metadata if fresh DB
+    existing_meta = db.execute("SELECT COUNT(*) FROM metadata").fetchone()[0]
+    if existing_meta == 0:
+        db.executemany("INSERT INTO metadata (name, value) VALUES (?, ?)", [
+            ("name", "United Kingdom"),
+            ("format", "png"),
+            ("bounds", f"{WEST},{SOUTH},{EAST},{NORTH}"),
+            ("center", f"{(WEST + EAST) / 2},{(SOUTH + NORTH) / 2},6"),
+            ("minzoom", str(MIN_ZOOM)),
+            ("maxzoom", str(MAX_ZOOM)),
+            ("type", "baselayer"),
+            ("attribution", "OpenStreetMap contributors"),
+        ])
+        db.commit()
+
+    # Build set of already-downloaded tiles for resume
+    existing_tiles = set()
+    if resuming:
+        print("Scanning existing tiles for resume...")
+        rows = db.execute("SELECT zoom_level, tile_column, tile_row FROM tiles").fetchall()
+        existing_tiles = {(r[0], r[1], r[2]) for r in rows}
+        print(f"Found {len(existing_tiles):,} existing tiles — will skip these.")
+        print()
 
     total = count_tiles()
-    print(f"Total tiles to download: {total:,}")
+    remaining = total - len(existing_tiles)
+    print(f"Total tiles:     {total:,}")
+    print(f"Already have:    {len(existing_tiles):,}")
+    print(f"Remaining:       {remaining:,}")
     print()
+
+    if remaining <= 0:
+        print("All tiles already downloaded!")
+        db.close()
+        return
 
     # Set up request headers (OSM requires a User-Agent)
     opener = urllib.request.build_opener()
@@ -81,6 +104,7 @@ def main():
     urllib.request.install_opener(opener)
 
     downloaded = 0
+    skipped = 0
     errors = 0
     start_time = time.time()
     server_idx = 0
@@ -92,11 +116,25 @@ def main():
         y_min = max(0, lat_to_tile(NORTH, z))
         y_max = min(2**z - 1, lat_to_tile(SOUTH, z))
         zoom_tiles = (x_max - x_min + 1) * (y_max - y_min + 1)
-        print(f"Zoom {z:2d}: {zoom_tiles:>8,} tiles (x:{x_min}-{x_max}, y:{y_min}-{y_max})")
+
+        # Count how many we already have at this zoom
+        zoom_existing = sum(1 for t in existing_tiles if t[0] == z) if existing_tiles else 0
+        zoom_remaining = zoom_tiles - zoom_existing
+        status = "DONE" if zoom_remaining == 0 else f"{zoom_remaining:,} to fetch"
+        print(f"Zoom {z:2d}: {zoom_tiles:>8,} tiles — {status}")
+
+        if zoom_remaining == 0:
+            continue
 
         for x in range(x_min, x_max + 1):
             for y in range(y_min, y_max + 1):
                 tms_y = (2 ** z - 1) - y
+
+                # Skip if already downloaded
+                if (z, x, tms_y) in existing_tiles:
+                    skipped += 1
+                    continue
+
                 url = TILE_SERVERS[server_idx % len(TILE_SERVERS)].format(z=z, x=x, y=y)
                 server_idx += 1
 
@@ -128,12 +166,12 @@ def main():
                 if downloaded % 500 == 0 and downloaded > 0:
                     elapsed = time.time() - start_time
                     rate = downloaded / elapsed if elapsed > 0 else 0
-                    eta = (total - downloaded) / rate if rate > 0 else 0
+                    eta = (remaining - downloaded) / rate if rate > 0 else 0
                     sys.stdout.write(
-                        f"\r  Progress: {downloaded:,}/{total:,} "
-                        f"({downloaded * 100 // total}%) | "
+                        f"\r  Progress: {downloaded:,}/{remaining:,} "
+                        f"({downloaded * 100 // remaining}%) | "
                         f"{rate:.0f} tiles/s | "
-                        f"ETA: {int(eta // 60)}m {int(eta % 60)}s | "
+                        f"ETA: {int(eta // 3600)}h{int(eta % 3600 // 60)}m | "
                         f"Errors: {errors}   "
                     )
                     sys.stdout.flush()
@@ -156,7 +194,8 @@ def main():
     elapsed = time.time() - start_time
     print()
     print()
-    print(f"Download complete: {downloaded:,} tiles in {int(elapsed // 60)}m {int(elapsed % 60)}s")
+    print(f"Download complete: {downloaded:,} new tiles in {int(elapsed // 3600)}h {int(elapsed % 3600 // 60)}m {int(elapsed % 60)}s")
+    print(f"Skipped (already had): {skipped:,}")
     print(f"Errors: {errors}")
 
 
