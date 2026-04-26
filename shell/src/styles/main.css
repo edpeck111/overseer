@@ -1,0 +1,20 @@
+/* OVERSEER v3 shell — CSS entry point.
+ * esbuild bundles this graph (via main.js's `import "./styles/main.css"`)
+ * into dist/main.css.
+ *
+ * Component CSS is co-located with the component (chrome/, palette/,
+ * modules/) and pulled in here so order is explicit and predictable. */
+
+@import "./tokens.css";
+@import "./base.css";
+
+/* Chrome (Sprint 1) ----------------------------------------------- */
+@import "../chrome/statusbar.css";
+@import "../chrome/breadcrumb.css";
+@import "../chrome/hotkey_bar.css";
+
+/* Overlays (Sprint 1) --------------------------------------------- */
+@import "../palette/palette.css";
+
+/* Modules (Sprint 1: HOME only; later sprints add others) --------- */
+@import "../modules/home.css";
