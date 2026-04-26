@@ -56,11 +56,13 @@ def encode(
         raise ValueError(f"msg_id out of range: {msg_id}")
     body = msgpack.packb(payload, use_bin_type=True)
     if compress:
-        body = (
-            brotli.compress(body, quality=_BROTLI_QUALITY, dictionary=dictionary)
-            if dictionary
-            else brotli.compress(body, quality=_BROTLI_QUALITY)
-        )
+        if dictionary is not None:
+            raise NotImplementedError(
+                "Brotli with shared dictionary needs a backend that exposes the "
+                "BrotliEncoderSetCustomDictionary API. Sprint 4 vendor decision; "
+                "the artifact is built and shipped today, the runtime use isn't."
+            )
+        body = brotli.compress(body, quality=_BROTLI_QUALITY)
     return _HEADER.pack(VERSION, int(op), msg_id) + body
 
 
@@ -83,10 +85,11 @@ def decode(
     op = real_op(op_byte)
     body = packet[HEADER_LEN:]
     if compress:
-        body = (
-            brotli.decompress(body, dictionary=dictionary)
-            if dictionary
-            else brotli.decompress(body)
-        )
+        if dictionary is not None:
+            raise NotImplementedError(
+                "Brotli with shared dictionary needs a backend that exposes the "
+                "BrotliDecoderSetCustomDictionary API. Sprint 4 vendor decision."
+            )
+        body = brotli.decompress(body)
     payload = msgpack.unpackb(body, raw=False)
     return op, msg_id, payload

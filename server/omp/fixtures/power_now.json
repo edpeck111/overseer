@@ -1,0 +1,16 @@
+{
+  "batt_pct": 82,
+  "draw_w": 4.2,
+  "draw_w_peak": 11.6,
+  "runtime_est_s": 1216260,
+  "cpu": 7,
+  "ram": 61,
+  "ram_used_gb": 9.8,
+  "ram_total_gb": 16,
+  "swap": 2,
+  "temp_c": 22,
+  "fan": 2100,
+  "input_w": 0,
+  "cycles": 238,
+  "health_pct": 96
+}
