@@ -1,52 +1,79 @@
-// Outbound action queue. When transport.health() === "offline", any
-// dispatched network operation is held here until the transport
-// returns; on return, drain() runs them FIFO.
+// Outbound action queue — IDB-backed since Sprint 4.
 //
-// Sprint 2: in-memory only. Sprint 4 (static-shell discipline) adds
-// IndexedDB persistence so the queue survives page reloads + offline
-// shutdowns. Until then, page reloads = queue lost (acceptable for
-// Sprint 2 demo purposes).
+// When transport.health() === "offline", any dispatched mutating
+// network operation is persisted here until the transport returns.
+// On return, drain() replays the requests FIFO via the transport.
 //
-// Design choice: queue stores zero-arg thunks, not request descriptors.
-// The dispatcher closes over op + payload + reconcile, so the queue
-// stays transport-agnostic.
+// Action shape that survives persistence:
+//   {
+//     optimistic?: <patch>,       // applied to store immediately by dispatcher
+//     request:    { method, path, body?, options? },   // what to replay
+//     queuedAt:   number,         // Date.now() at enqueue
+//   }
+//
+// reconcile / rollback functions are NOT persisted (closures can't be
+// serialised). Modules that need post-replay reconciliation should
+// listen for normal data refreshes after the queue drains.
+
+import * as outbox from "./idb_outbox.js";
+
+const DEFAULT_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days (Ted's directive)
 
 export class ActionQueue {
-  constructor({ store } = {}) {
-    /** @type {Array<{ action: object, run: () => Promise<any> }>} */
-    this.items = [];
+  constructor({ store, pruneAgeMs = DEFAULT_PRUNE_AGE_MS } = {}) {
     this.store = store;
+    this.pruneAgeMs = pruneAgeMs;
     this._publishCount();
+    // Best-effort startup prune of stale entries.
+    this.prune().catch(() => {});
   }
 
-  enqueue(item) {
-    this.items.push(item);
-    this._publishCount();
+  async enqueue({ optimistic, request }) {
+    if (!request || !request.method || !request.path) {
+      throw new Error("ActionQueue.enqueue: action.request {method, path} required");
+    }
+    const queuedAt = Date.now();
+    await outbox.append({ optimistic: optimistic || null, request, queuedAt });
+    await this._publishCount();
   }
 
-  /** Pop items one at a time, awaiting each `execute(item)`. Stops
-   *  on first failure (the failing item stays at the head of the queue
-   *  for the next drain attempt). */
-  async drain() {
-    while (this.items.length > 0) {
-      const head = this.items[0];
+  /** Replay queued requests via the transport, FIFO. Stops on first
+   *  failure leaving the head intact for the next drain attempt. */
+  async drain(transport) {
+    const all = await outbox.readAll();
+    for (const entry of all) {
       try {
-        await head.run();
+        await transport.request(
+          entry.request.method,
+          entry.request.path,
+          entry.request.body,
+          entry.request.options,
+        );
+        await outbox.remove(entry.key);
       } catch {
-        // Leave head in place; the caller decides what to do.
+        await this._publishCount();
         return false;
       }
-      this.items.shift();
-      this._publishCount();
     }
+    await this._publishCount();
     return true;
   }
 
-  size() { return this.items.length; }
-  peek() { return this.items[0]; }
-  clear() { this.items.length = 0; this._publishCount(); }
+  async size()  { return outbox.count(); }
+  async clear() { await outbox.clearForTests(); await this._publishCount(); }
 
-  _publishCount() {
-    if (this.store) this.store.set({ outboxCount: this.items.length });
+  /** Prune entries older than pruneAgeMs (default 7 d). */
+  async prune() {
+    const cutoff = Date.now() - this.pruneAgeMs;
+    const n = await outbox.pruneOlderThan(cutoff);
+    await this._publishCount();
+    return n;
+  }
+
+  async _publishCount() {
+    if (this.store) {
+      const n = await outbox.count();
+      this.store.set({ outboxCount: n });
+    }
   }
 }

@@ -146,19 +146,34 @@ if (!meshDotsOn.includes("●") || meshDotsOn.includes("○")) fail(`MESH health
 pass(`MESH indicator on healthy: "${meshDotsOn}"`);
 
 const t = overseer.transport;
+// Replace transport.request with a tracker so we can verify drain order.
+const origRequest = t.request.bind(t);
+const ranPaths = [];
+t.request = async (method, path, body, opts) => {
+  ranPaths.push(path);
+  if (path === "/api/p/now")     return { batt_pct: 50 };  // mock POWER fetch
+  if (path === "/api/p/radio")   return {};
+  if (path === "/api/p/storage") return {};
+  return { ok: 1 };
+};
+await overseer.queue.clear();      // start clean
 t.healthState = "offline";
-let ran = [];
-overseer.dispatch({ optimistic: { _testFlag: 1 }, run: async () => { ran.push("a"); return "a"; }, reconcile: () => ({}) });
-overseer.dispatch({ optimistic: {}, run: async () => { ran.push("b"); return "b"; } });
+await overseer.dispatch({ optimistic: { _testFlag: 1 }, request: { method: "POST", path: "/api/_test/a", body: {} } });
+await overseer.dispatch({ optimistic: {},                request: { method: "POST", path: "/api/_test/b", body: {} } });
 await new Promise((r) => setTimeout(r, 10));
-if (ran.length !== 0 || overseer.queue.size() !== 2) fail(`offline queue mis-state ran=${ran.length} sz=${overseer.queue.size()}`);
+const sz0 = await overseer.queue.size();
+const ranBefore = ranPaths.filter(p => p.startsWith("/api/_test/")).length;
+if (ranBefore !== 0 || sz0 !== 2) fail(`offline queue mis-state ran=${ranBefore} sz=${sz0}`);
 pass(`offline queue holds 2 actions (size=2, ran=0)`);
 
 t._setHealth("wifi");
 await new Promise((r) => setTimeout(r, 50));
-if (ran.length !== 2 || ran[0] !== "a" || ran[1] !== "b") fail(`queue drained wrong: ${ran}`);
-if (overseer.queue.size() !== 0) fail(`queue not emptied: size=${overseer.queue.size()}`);
-pass(`queue drained FIFO on recovery: ${ran.join(",")}`);
+const ranAfter = ranPaths.filter(p => p.startsWith("/api/_test/"));
+const sz1 = await overseer.queue.size();
+if (ranAfter.length !== 2 || ranAfter[0] !== "/api/_test/a" || ranAfter[1] !== "/api/_test/b") fail(`queue drained wrong: ${ranAfter.join(",")}`);
+if (sz1 !== 0) fail(`queue not emptied: size=${sz1}`);
+pass(`queue drained FIFO on recovery: ${ranAfter.map(p => p.split("/").pop()).join(",")}`);
+t.request = origRequest;
 
 // ---- Sprint 3 POWER module assertions ----------------------------
 document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "P" }));
