@@ -1,0 +1,12 @@
+{
+  "id": "numberhunt",
+  "version": 1,
+  "name": "Number Hunt",
+  "category": "strategy",
+  "description": "Find the target number with limited guesses",
+  "config": {
+    "easy": {"min": 1, "max": 50, "attempts": 10},
+    "medium": {"min": 1, "max": 100, "attempts": 7},
+    "hard": {"min": 1, "max": 500, "attempts": 9}
+  }
+}

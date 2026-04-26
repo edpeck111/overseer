@@ -1,0 +1,33 @@
+{
+  "id": "scramble",
+  "version": 1,
+  "name": "Word Scramble",
+  "category": "word",
+  "description": "Unscramble the survival term",
+  "words": [
+    {"word": "compass", "hint": "Navigation tool"},
+    {"word": "shelter", "hint": "Protection from elements"},
+    {"word": "bandage", "hint": "First aid supply"},
+    {"word": "antenna", "hint": "Signal equipment"},
+    {"word": "rations", "hint": "Food supplies"},
+    {"word": "lantern", "hint": "Light source"},
+    {"word": "canteen", "hint": "Water container"},
+    {"word": "tourniquet", "hint": "Stops bleeding"},
+    {"word": "kindling", "hint": "Fire starter material"},
+    {"word": "splint", "hint": "Bone support"},
+    {"word": "flint", "hint": "Spark maker"},
+    {"word": "tinder", "hint": "Burns easily"},
+    {"word": "snare", "hint": "Animal trap"},
+    {"word": "beacon", "hint": "Signal device"},
+    {"word": "purify", "hint": "Make water safe"},
+    {"word": "forage", "hint": "Find wild food"},
+    {"word": "suture", "hint": "Stitch a wound"},
+    {"word": "triage", "hint": "Prioritise casualties"},
+    {"word": "cistern", "hint": "Water storage"},
+    {"word": "voltage", "hint": "Electrical measure"},
+    {"word": "dynamo", "hint": "Generates power"},
+    {"word": "mortar", "hint": "Building material"},
+    {"word": "quinine", "hint": "Malaria treatment"},
+    {"word": "iodine", "hint": "Disinfectant"}
+  ]
+}
