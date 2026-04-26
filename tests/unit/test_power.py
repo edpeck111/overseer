@@ -93,3 +93,42 @@ def test_hardware_flavour_explicitly_unimplemented(monkeypatch):
     monkeypatch.setenv("OVERSEER_POWER_SOURCE", "hardware")
     with pytest.raises(NotImplementedError, match="hardware"):
         P._select_source()
+
+
+# --------------------------------------------------------------------- #
+# WS push producer — Sprint 4
+# --------------------------------------------------------------------- #
+
+def test_producer_starts_and_stops():
+    import time
+    from server.modules.power import (
+        producer_is_running, start_producer, stop_producer,
+    )
+    P.reset_for_tests(source=P.SyntheticSource(seed=11))
+    assert not producer_is_running()
+    start_producer()
+    assert producer_is_running()
+    stop_producer()
+    # Daemon thread joins implicitly on event-set; give it a moment.
+    time.sleep(0.05)
+    assert not producer_is_running()
+
+
+def test_producer_registered_with_ws_hub():
+    """power.py auto-registers POWER_TOPIC with server.ws on import."""
+    from server import ws as ws_mod
+    from server.modules.power import POWER_TOPIC
+    assert POWER_TOPIC in ws_mod._producers
+
+
+def test_first_subscribe_starts_producer(monkeypatch):
+    """Hub fires power.start_producer() when the topic gets its first sub."""
+    from server import ws as ws_mod
+    from server.modules.power import POWER_TOPIC, producer_is_running, stop_producer
+    stop_producer()
+    # Fake-subscribe via the internal hook (avoid spinning up a real ws).
+    ws_mod._on_first_subscribe(POWER_TOPIC)
+    assert producer_is_running()
+    ws_mod._on_last_unsubscribe(POWER_TOPIC)
+    import time; time.sleep(0.05)
+    assert not producer_is_running()

@@ -40,6 +40,12 @@ _lock = threading.RLock()
 _subs: dict[str, set] = defaultdict(set)            # topic -> {ws}
 _topics_for: dict[Any, set[str]] = defaultdict(set) # ws -> {topic}
 
+# Producers — modules register lazy-start producers per topic. The hub
+# fires start() on first subscribe, stop() on last unsubscribe. This
+# keeps daemon threads from accumulating in tests and from running when
+# no client wants the data.
+_producers: dict[str, dict] = {}
+
 
 def register(app) -> None:
     """Attach the /ws blueprint to a Flask ``app``.
@@ -94,6 +100,34 @@ def subscriber_count(topic: str | None = None) -> int:
         return len(_subs.get(topic, ()))
 
 
+def register_producer(topic: str, *, start, stop) -> None:
+    """Register a producer for ``topic``.
+
+    ``start()`` is called when the topic gains its first subscriber;
+    ``stop()`` when it loses its last one. The hub doesn't start the
+    producer at registration time — only on demand.
+    """
+    _producers[topic] = {"start": start, "stop": stop}
+
+
+def _on_first_subscribe(topic: str) -> None:
+    p = _producers.get(topic)
+    if p:
+        try:
+            p["start"]()
+        except Exception:
+            pass
+
+
+def _on_last_unsubscribe(topic: str) -> None:
+    p = _producers.get(topic)
+    if p:
+        try:
+            p["stop"]()
+        except Exception:
+            pass
+
+
 # --------------------------------------------------------------------- #
 # Internals
 # --------------------------------------------------------------------- #
@@ -111,17 +145,27 @@ def _on_message(ws, raw: str) -> None:
     op = msg.get("op")
     if op == "subscribe":
         topics = msg.get("topics") or []
+        first_subs = []
         with _lock:
             for t in topics:
+                if t not in _subs or not _subs[t]:
+                    first_subs.append(t)
                 _subs[t].add(ws)
                 _topics_for[ws].add(t)
+        for t in first_subs:
+            _on_first_subscribe(t)
         _send(ws, {"op": "ack", "for": "subscribe", "topics": list(topics)})
     elif op == "unsubscribe":
         topics = msg.get("topics") or []
+        last_unsubs = []
         with _lock:
             for t in topics:
                 _subs[t].discard(ws)
                 _topics_for[ws].discard(t)
+                if t in _subs and not _subs[t]:
+                    last_unsubs.append(t)
+        for t in last_unsubs:
+            _on_last_unsubscribe(t)
         _send(ws, {"op": "ack", "for": "unsubscribe", "topics": list(topics)})
     elif op == "ping":
         _send(ws, {"op": "pong", "server_time": int(time.time())})
@@ -130,9 +174,14 @@ def _on_message(ws, raw: str) -> None:
 
 
 def _on_disconnect(ws) -> None:
+    last_unsubs = []
     with _lock:
         for t in _topics_for.pop(ws, ()):
             _subs[t].discard(ws)
+            if t in _subs and not _subs[t]:
+                last_unsubs.append(t)
+    for t in last_unsubs:
+        _on_last_unsubscribe(t)
 
 
 def _send(ws, payload: dict) -> bool:

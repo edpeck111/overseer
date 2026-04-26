@@ -19,7 +19,8 @@ import { tileEl, bignumEl, kvGridEl } from "../components/tile.js";
 import { barEl } from "../components/bar.js";
 import { sparklineEl } from "../components/sparkline.js";
 
-const POLL_MS = 30_000;     // ADR-0008 HOT class on WiFi (canary read path)
+const POLL_MS = 30_000;     // ADR-0008 HOT class on WiFi (canary read path; fallback only)
+const LIVE_CHANNEL = "power.now";  // server.modules.power producer publishes here
 const HISTORY_LEN = 32;     // sparkline width
 
 export function mountPower(root, store, ctx) {
@@ -144,14 +145,32 @@ export function mountPower(root, store, ctx) {
     }
   }
 
-  // First paint kicks off both transient and static fetches.
+  // First paint: HTTP fetch for the instant snapshot, then subscribe to
+  // live WS push so updates arrive without 30s of waiting. Sprint 4
+  // wired the producer thread server-side; HttpTransport.subscribe()
+  // forwards SUBSCRIBE over WS and fires the callback on each PUSH.
+  // Per ADR-0008 the WiFi path is "live (WS)"; mesh stays at 30 s poll
+  // (OmpTransport.subscribe handles that case).
   pull();
   pullStatic();
-  timer = setInterval(pull, POLL_MS);
 
-  // Cleanup on unmount.
+  let unsubscribeLive = () => {};
+  try {
+    unsubscribeLive = ctx.transport.subscribe(LIVE_CHANNEL, (sample) => {
+      ring.push(sample);
+      if (ring.length > HISTORY_LEN) ring.shift();
+      repaintBattery(sample);
+      repaintLoad(sample);
+    });
+  } catch (e) {
+    // Some transports (jsdom smoke) don't fully wire subscribe — fall
+    // back to the Sprint-3 polling cadence so the tile updates anyway.
+    timer = setInterval(pull, POLL_MS);
+  }
+
   return function unmount() {
     active = false;
+    try { unsubscribeLive(); } catch { /* ignore */ }
     if (timer) clearInterval(timer);
   };
 }

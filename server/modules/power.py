@@ -357,3 +357,74 @@ def register(app) -> None:
     if "power" in app.blueprints:
         return
     app.register_blueprint(power_bp)
+
+
+# --------------------------------------------------------------------- #
+# WS push producer — lazy daemon thread.
+# --------------------------------------------------------------------- #
+import threading  # noqa: E402  (intentional late import — keeps module-load cost low)
+
+POWER_TOPIC = "power.now"
+
+_producer_thread: threading.Thread | None = None
+_producer_stop: threading.Event | None = None
+
+
+def _producer_loop():
+    """Take a sample every POWER_POLL_S seconds and publish on POWER_TOPIC.
+
+    Sprint 4 cadence is the same 30 s the polling path used in Sprint 3
+    (ADR-0008 HOT class). The loop checks the stop event on every wait
+    so unsubscribing kills the thread within at most one cadence.
+    """
+    from server import ws as _ws   # local import — avoids module-load cycle
+    while _producer_stop is not None and not _producer_stop.wait(POWER_POLL_S):
+        try:
+            sample = read_sample()
+            _ws.publish(POWER_TOPIC, sample.to_wire())
+        except Exception:  # noqa: BLE001 -- swallow; loop continues
+            pass
+
+
+def start_producer() -> None:
+    """Lazy-start the producer thread. Idempotent.
+
+    Called by the WS hub when ``power.now`` gets its first subscriber.
+    Per Ted's Sprint-4 directive: starts on first subscribe, not at app
+    boot, so tests don't accumulate background threads. If a third
+    module repeats this pattern, refactor to a generic scheduler.
+    """
+    global _producer_thread, _producer_stop
+    if _producer_thread is not None and _producer_thread.is_alive():
+        return
+    _producer_stop = threading.Event()
+    _producer_thread = threading.Thread(
+        target=_producer_loop, daemon=True, name="power-producer",
+    )
+    _producer_thread.start()
+
+
+def stop_producer() -> None:
+    """Stop the producer thread (called when last subscriber disconnects)."""
+    global _producer_thread, _producer_stop
+    if _producer_stop is not None:
+        _producer_stop.set()
+    _producer_thread = None
+    _producer_stop = None
+
+
+def producer_is_running() -> bool:
+    return _producer_thread is not None and _producer_thread.is_alive()
+
+
+# Auto-register with the WS hub on module load. Hub starts the thread
+# only when a client actually subscribes.
+def _bind_to_ws_hub():
+    try:
+        from server import ws as _ws
+        _ws.register_producer(POWER_TOPIC, start=start_producer, stop=stop_producer)
+    except Exception:
+        pass
+
+
+_bind_to_ws_hub()
