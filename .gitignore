@@ -1,5 +1,6 @@
 # v2 entries (preserved)
 overseer.db
+overseer.db-*
 keys/*_private.pem
 __pycache__/
 zim/
@@ -22,5 +23,4 @@ node_modules/
 # editor / OS
 .DS_Store
 *.swp
-.idea/
-.vscode/
+.i
