@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>OVERSEER RELAY</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --glow: #ffaa00;
+    --glow-dim: #996600;
+    --glow-bright: #ffcc44;
+    --glow-hot: #ffddaa;
+    --border: #3a2a0a;
+    --red: #ff4444;
+    --red-dim: #661111;
+    --green: #33ff33;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--glow);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65em;
+    flex-shrink: 0;
+  }
+  .status-bar .title {
+    color: var(--glow-bright);
+    letter-spacing: 3px;
+    font-size: 1.1em;
+  }
+  .status-bar .spacer { flex:1; }
+  .status-link { display:flex; align-items:center; gap:4px; }
+  .link-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+  }
+  .link-dot.up { background: var(--green); }
+  .signal { color: var(--glow-dim); }
+  .queue-badge {
+    background: var(--glow-dim);
+    color: #000;
+    padding: 0 4px;
+    font-size: 0.9em;
+  }
+
+  /* Nav tabs */
+  .nav-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .nav-tabs button {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em;
+    padding: 8px 4px;
+    background: transparent;
+    color: var(--glow-dim);
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    letter-spacing: 2px;
+  }
+  .nav-tabs button.active {
+    color: var(--glow-bright);
+    border-bottom-color: var(--glow);
+  }
+
+  /* Panels */
+  .panel { display:none; flex:1; flex-direction:column; overflow:hidden; }
+  .panel.active { display:flex; }
+
+  /* Login screen */
+  .login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 20px;
+  }
+  .login-label {
+    font-size: 0.7em;
+    color: var(--glow-dim);
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+  }
+  .login-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.03);
+    color: var(--glow);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+    letter-spacing: 2px;
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 4px;
+  }
+  .login-btn:hover { border-color: var(--glow-dim); }
+
+  /* Conversation list */
+  .conv-list { flex:1; overflow-y:auto; }
+  .conv-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+  }
+  .conv-item:active { background: rgba(255,255,255,0.05); }
+  .conv-info { flex:1; min-width:0; }
+  .conv-name { color: var(--glow-bright); font-size: 0.8em; letter-spacing:1px; }
+  .conv-preview { color: var(--glow-dim); font-size: 0.7em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv-meta { text-align:right; flex-shrink:0; }
+  .conv-time { color: var(--glow-dim); font-size:0.6em; }
+  .conv-badge { background:var(--glow); color:#000; font-size:0.55em; padding:1px 5px; font-weight:bold; margin-top:2px; display:inline-block; }
+  .conv-new-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--glow);
+    cursor: pointer;
+  }
+
+  /* Thread */
+  .thread-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .back-btn {
+    background: transparent;
+    border: none;
+    color: var(--glow-dim);
+    font-family: 'Courier New', monospace;
+    font-size: 1em;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .thread-name { color: var(--glow-bright); letter-spacing:2px; font-size:0.8em; }
+  .messages { flex:1; overflow-y:auto; padding:8px 10px 4px; display:flex; flex-direction:column; gap:6px; }
+  .bubble {
+    max-width: 85%;
+    padding: 6px 10px;
+    font-size: 0.8em;
+    line-height: 1.5;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    border: 1px solid var(--border);
+  }
+  .bubble.sent { align-self:flex-end; background:rgba(255,255,255,0.05); border-color:var(--glow-dim); }
+  .bubble.recv { align-self:flex-start; background:rgba(255,255,255,0.02); }
+  .bubble-meta { font-size:0.6em; color:var(--glow-dim); margin-top:2px; display:flex; gap:6px; align-items:center; }
+  .bubble.sent .bubble-meta { justify-content:flex-end; }
+  .tick { font-size:0.9em; }
+  .tick.queued { color:var(--glow-dim); }
+  .tick.delivered { color:var(--glow); }
+  .tick.read { color:var(--glow-bright); }
+
+  .input-bar {
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    align-items: flex-end;
+  }
+  .input-bar textarea {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--glow);
+    outline: none;
+    resize: none;
+    min-height: 32px;
+    max-height: 80px;
+    line-height: 1.4;
+  }
+  .input-bar textarea:focus { border-color: var(--glow-dim); }
+  .char-ct { font-size:0.55em; color:var(--glow-dim); align-self:center; min-width:36px; text-align:right; }
+  .char-ct.warn { color: #ffaa00; }
+  .char-ct.over { color: var(--red); }
+  .tx-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--glow-dim);
+    color: var(--glow);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Knowledge panel */
+  .kb-search-bar {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .kb-search-bar input {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--glow);
+    outline: none;
+  }
+  .kb-search-bar input:focus { border-color: var(--glow-dim); }
+  .kb-search-bar button {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid var(--glow-dim);
+    color: var(--glow);
+    cursor: pointer;
+  }
+  .kb-content { flex:1; overflow-y:auto; padding:8px 10px; font-size:0.8em; line-height:1.6; }
+  .kb-result {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+  }
+  .kb-result:active { background: rgba(255,255,255,0.03); }
+  .kb-result-title { color: var(--glow-bright); }
+
+  /* Progress bar */
+  .progress-container {
+    padding: 10px;
+    text-align: center;
+    color: var(--glow-dim);
+    font-size: 0.7em;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    margin: 6px 0;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--glow);
+    transition: width 0.3s;
+  }
+  .cancel-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 0.65em;
+    padding: 2px 8px;
+    background: transparent;
+    border: 1px solid var(--red-dim);
+    color: var(--red);
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .empty { padding:30px 20px; text-align:center; color:var(--glow-dim); font-size:0.8em; }
+
+  /* LLM query panel */
+  .llm-input {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .llm-input textarea {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+    padding: 6px 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--glow);
+    outline: none;
+    resize: none;
+    min-height: 50px;
+  }
+  .llm-response { flex:1; overflow-y:auto; padding:10px; font-size:0.8em; line-height:1.6; white-space:pre-wrap; word-wrap:break-word; }
+</style>
+</head>
+<body>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <span class="title">OVERSEER</span>
+  <span class="spacer"></span>
+  <span class="status-link">
+    <span class="link-dot" id="link-dot"></span>
+    <span class="signal" id="signal-text">--</span>
+  </span>
+  <span class="queue-badge" id="queue-badge" style="display:none"></span>
+  <span id="user-label" style="color:var(--glow-dim);letter-spacing:1px;">---</span>
+  <span id="logout-btn" style="cursor:pointer;color:var(--glow-dim);display:none;" onclick="logout()">[X]</span>
+</div>
+
+<!-- Login Screen -->
+<div id="login-screen" class="login-screen">
+  <div class="login-label">IDENTIFY OPERATOR</div>
+  <div id="user-list">Loading...</div>
+</div>
+
+<!-- Main App (hidden until login) -->
+<div id="main-app" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+
+  <!-- Nav Tabs -->
+  <div class="nav-tabs">
+    <button class="active" id="tab-chat" onclick="switchTab('chat')">CHAT</button>
+    <button id="tab-knowledge" onclick="switchTab('knowledge')">KNOWLEDGE</button>
+    <button id="tab-ask" onclick="switchTab('ask')">ASK</button>
+  </div>
+
+  <!-- CHAT Panel -->
+  <div id="panel-chat" class="panel active">
+    <!-- Conversation list -->
+    <div id="chat-conv-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+      <div style="display:flex; align-items:center; padding:6px 10px; border-bottom:1px solid var(--border);">
+        <span style="font-size:0.65em; color:var(--glow-dim); letter-spacing:2px;">CONVERSATIONS</span>
+        <span style="flex:1;"></span>
+        <button class="conv-new-btn" onclick="showNewMsg()">+ NEW</button>
+      </div>
+      <div id="conv-list" class="conv-list"></div>
+    </div>
+    <!-- Thread view -->
+    <div id="chat-thread-view" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="thread-header">
+        <button class="back-btn" onclick="backToConv()">&lt;</button>
+        <span class="thread-name" id="thread-name">---</span>
+      </div>
+      <div id="thread-messages" class="messages"></div>
+      <div class="input-bar">
+        <textarea id="msg-input" rows="1" placeholder="Type message..."
+                  oninput="autoResize(this);updateCount();"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"></textarea>
+        <span class="char-ct" id="char-ct"></span>
+        <button class="tx-btn" onclick="sendMsg()">TX</button>
+      </div>
+    </div>
+    <!-- New message recipient picker -->
+    <div id="chat-new-view" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="thread-header">
+        <button class="back-btn" onclick="backToConv()">&lt;</button>
+        <span style="color:var(--glow-dim); letter-spacing:2px; font-size:0.75em;">NEW MESSAGE</span>
+      </div>
+      <div id="new-msg-list" class="conv-list"></div>
+    </div>
+  </div>
+
+  <!-- KNOWLEDGE Panel -->
+  <div id="panel-knowledge" class="panel">
+    <div class="kb-search-bar">
+      <input type="text" id="kb-query" placeholder="Search knowledge base..."
+             onkeydown="if(event.key==='Enter')kbSearch();">
+      <button onclick="kbSearch()">SEARCH</button>
+    </div>
+    <div id="kb-content" class="kb-content">
+      <div class="empty">Search the OVERSEER knowledge base.<br>Results arrive via LoRa (may take 30-60 sec).</div>
+    </div>
+  </div>
+
+  <!-- ASK Panel (LLM Query) -->
+  <div id="panel-ask" class="panel">
+    <div class="llm-input">
+      <textarea id="llm-query" placeholder="Ask OVERSEER anything..."
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();llmAsk();}"></textarea>
+      <button class="tx-btn" onclick="llmAsk()" style="align-self:flex-end;">ASK</button>
+    </div>
+    <div id="llm-response" class="llm-response">
+      <div class="empty">Ask a question. OVERSEER will search its knowledge base and respond via LoRa.<br>Responses typically take 2-5 minutes.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let userId = null;
+let userCallsign = '';
+let currentContact = null;
+let refreshTimer = null;
+let statusTimer = null;
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function formatTime(ts) {
+  const d = new Date(ts * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function tickIcon(status) {
+  if (status === 'queued') return '<span class="tick queued">&#9675;</span>';
+  if (status === 'sent') return '<span class="tick queued">&#10003;</span>';
+  if (status === 'delivered') return '<span class="tick delivered">&#10003;&#10003;</span>';
+  if (status === 'read') return '<span class="tick read">&#10003;&#10003;</span>';
+  return '';
+}
+
+// === AUTH ===
+async function loadUsers() {
+  try {
+    const r = await fetch('/api/users');
+    const d = await r.json();
+    let html = '';
+    d.users.forEach(u => {
+      html += '<button class="login-btn" onclick="login(' + u.id + ',\'' + esc(u.callsign).replace(/'/g, "\\'") + '\')">' + esc(u.callsign) + '</button>';
+    });
+    document.getElementById('user-list').innerHTML = html || '<div class="empty">No operators. Provision keys first.</div>';
+  } catch(e) { document.getElementById('user-list').innerHTML = '<div class="empty">Connection error</div>'; }
+}
+
+function login(id, callsign) {
+  userId = id; userCallsign = callsign;
+  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:id})});
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'flex';
+  document.getElementById('user-label').textContent = callsign;
+  document.getElementById('logout-btn').style.display = '';
+  loadConversations();
+  refreshTimer = setInterval(() => { if(currentContact) loadThread(currentContact.id, currentContact.callsign, true); else loadConversations(); }, 5000);
+  statusTimer = setInterval(updateStatus, 10000);
+  updateStatus();
+}
+
+function logout() {
+  userId = null; userCallsign = ''; currentContact = null;
+  if(refreshTimer) clearInterval(refreshTimer);
+  if(statusTimer) clearInterval(statusTimer);
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('user-label').textContent = '---';
+  document.getElementById('logout-btn').style.display = 'none';
+  loadUsers();
+}
+
+// === STATUS ===
+async function updateStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    document.getElementById('link-dot').className = 'link-dot' + (d.link_up ? ' up' : '');
+    document.getElementById('signal-text').textContent = d.signal_rssi ? (d.signal_rssi + 'dBm') : '--';
+    const badge = document.getElementById('queue-badge');
+    if (d.queue_depth > 0) { badge.textContent = d.queue_depth + ' queued'; badge.style.display = ''; }
+    else badge.style.display = 'none';
+  } catch(e) {}
+}
+
+// === TABS ===
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+// === CHAT ===
+async function loadConversations() {
+  if (!userId) return;
+  try {
+    const r = await fetch('/api/conversations/' + userId);
+    const d = await r.json();
+    const el = document.getElementById('conv-list');
+    if (!d.conversations.length) { el.innerHTML = '<div class="empty">No conversations yet.<br>Tap + NEW to start one.</div>'; return; }
+    let html = '';
+    d.conversations.forEach(c => {
+      let preview = c.last_body || '';
+      if (preview.length > 45) preview = preview.substring(0, 45) + '...';
+      if (c.last_from == userId && preview) preview = 'You: ' + preview;
+      html += '<div class="conv-item" onclick="openThread(' + c.other_id + ',\'' + esc(c.callsign).replace(/'/g, "\\'") + '\')">';
+      html += '<div class="conv-info"><div class="conv-name">' + esc(c.callsign) + '</div>';
+      html += '<div class="conv-preview">' + esc(preview) + '</div></div>';
+      html += '<div class="conv-meta">';
+      if (c.last_at) html += '<div class="conv-time">' + formatTime(c.last_at) + '</div>';
+      if (c.unread_count > 0) html += '<div class="conv-badge">' + c.unread_count + '</div>';
+      html += '</div></div>';
+    });
+    el.innerHTML = html;
+  } catch(e) {}
+}
+
+function openThread(id, callsign) { loadThread(id, callsign, false); }
+
+async function loadThread(id, callsign, isRefresh) {
+  if (!userId) return;
+  document.getElementById('chat-conv-view').style.display = 'none';
+  document.getElementById('chat-new-view').style.display = 'none';
+  document.getElementById('chat-thread-view').style.display = 'flex';
+  try {
+    const r = await fetch('/api/thread/' + userId + '/' + id);
+    const d = await r.json();
+    currentContact = d.contact;
+    document.getElementById('thread-name').textContent = d.contact.callsign;
+    const el = document.getElementById('thread-messages');
+    let html = '';
+    d.messages.forEach(m => {
+      const isSent = m.from_user == userId;
+      html += '<div class="bubble ' + (isSent ? 'sent' : 'recv') + '">';
+      html += esc(m.body);
+      html += '<div class="bubble-meta"><span>' + formatTime(m.sent_at) + '</span>';
+      if (isSent && m.delivery_status) html += tickIcon(m.delivery_status);
+      html += '</div></div>';
+    });
+    if (!d.messages.length) html = '<div class="empty">No messages yet.</div>';
+    el.innerHTML = html;
+    if (!isRefresh || el.scrollHeight - el.scrollTop - el.clientHeight < 80) el.scrollTop = el.scrollHeight;
+    // Mark read
+    d.messages.forEach(m => { if(m.from_user != userId && !m.read_at) fetch('/api/read/' + m.id, {method:'POST'}); });
+    if (!isRefresh) document.getElementById('msg-input').focus();
+  } catch(e) {}
+}
+
+function backToConv() {
+  currentContact = null;
+  document.getElementById('chat-thread-view').style.display = 'none';
+  document.getElementById('chat-new-view').style.display = 'none';
+  document.getElementById('chat-conv-view').style.display = 'flex';
+  loadConversations();
+}
+
+async function sendMsg() {
+  if (!currentContact) return;
+  const input = document.getElementById('msg-input');
+  const body = input.value.trim();
+  if (!body) return;
+  try {
+    await fetch('/api/send', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({from:userId, to:currentContact.id, body:body})});
+    input.value = '';
+    autoResize(input); updateCount();
+    loadThread(currentContact.id, currentContact.callsign, false);
+  } catch(e) {}
+}
+
+async function showNewMsg() {
+  document.getElementById('chat-conv-view').style.display = 'none';
+  document.getElementById('chat-thread-view').style.display = 'none';
+  document.getElementById('chat-new-view').style.display = 'flex';
+  try {
+    const r = await fetch('/api/users');
+    const d = await r.json();
+    let html = '';
+    d.users.forEach(u => {
+      if (u.id !== userId) {
+        html += '<div class="conv-item" onclick="openThread(' + u.id + ',\'' + esc(u.callsign).replace(/'/g, "\\'") + '\')"><div class="conv-info"><div class="conv-name">' + esc(u.callsign) + '</div></div></div>';
+      }
+    });
+    document.getElementById('new-msg-list').innerHTML = html || '<div class="empty">No operators available.</div>';
+  } catch(e) {}
+}
+
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,80)+'px'; }
+function updateCount() {
+  const c = new TextEncoder().encode(document.getElementById('msg-input').value).length;
+  const el = document.getElementById('char-ct');
+  el.textContent = c + 'B';
+  el.className = 'char-ct' + (c > 180 ? ' over' : c > 150 ? ' warn' : '');
+}
+
+// === KNOWLEDGE ===
+let kbMsgId = null;
+let kbPollTimer = null;
+
+async function kbSearch() {
+  const q = document.getElementById('kb-query').value.trim();
+  if (!q) return;
+  const el = document.getElementById('kb-content');
+  el.innerHTML = '<div class="progress-container">Searching via LoRa...<div class="progress-bar"><div class="progress-fill" id="kb-progress" style="width:0%"></div></div></div>';
+  try {
+    const r = await fetch('/api/kb/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q})});
+    const d = await r.json();
+    if (d.msg_id) { kbMsgId = d.msg_id; pollKbTransfer(); }
+    else el.innerHTML = '<div class="empty">LoRa not available.</div>';
+  } catch(e) { el.innerHTML = '<div class="empty">Error sending search.</div>'; }
+}
+
+function pollKbTransfer() {
+  if (kbPollTimer) clearInterval(kbPollTimer);
+  kbPollTimer = setInterval(async () => {
+    try {
+      const r = await fetch('/api/transfer/' + kbMsgId);
+      const d = await r.json();
+      const pBar = document.getElementById('kb-progress');
+      if (pBar) pBar.style.width = (d.progress * 100) + '%';
+      if (d.complete) {
+        clearInterval(kbPollTimer);
+        try {
+          const results = JSON.parse(d.data);
+          let html = '';
+          results.forEach(r => {
+            html += '<div class="kb-result" onclick="kbFetch(\'' + esc(r.link).replace(/'/g, "\\'") + '\')"><div class="kb-result-title">' + esc(r.title) + '</div></div>';
+          });
+          document.getElementById('kb-content').innerHTML = html || '<div class="empty">No results found.</div>';
+        } catch(e) {
+          document.getElementById('kb-content').innerHTML = '<div class="empty">Failed to parse results.</div>';
+        }
+      }
+    } catch(e) {}
+  }, 2000);
+}
+
+async function kbFetch(path) {
+  const el = document.getElementById('kb-content');
+  el.innerHTML = '<div class="progress-container">Fetching article via LoRa...<div class="progress-bar"><div class="progress-fill" id="kb-progress" style="width:0%"></div></div><div id="kb-eta"></div><button class="cancel-btn" onclick="kbCancel()">CANCEL</button></div>';
+  try {
+    const r = await fetch('/api/kb/fetch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path})});
+    const d = await r.json();
+    if (d.msg_id) {
+      kbMsgId = d.msg_id;
+      if (kbPollTimer) clearInterval(kbPollTimer);
+      kbPollTimer = setInterval(async () => {
+        try {
+          const r2 = await fetch('/api/transfer/' + kbMsgId);
+          const d2 = await r2.json();
+          const pBar = document.getElementById('kb-progress');
+          if (pBar) pBar.style.width = (d2.progress * 100) + '%';
+          const eta = document.getElementById('kb-eta');
+          if (eta && d2.total > 0) eta.textContent = d2.received + '/' + d2.total + ' chunks';
+          // Progressive rendering: show text as it arrives
+          if (d2.data && d2.data.length > 0) {
+            el.innerHTML = '<div style="padding:10px;font-size:0.8em;line-height:1.6;white-space:pre-wrap;">' + esc(d2.data) + '</div>';
+            if (!d2.complete) {
+              el.innerHTML += '<div class="progress-container">' + d2.received + '/' + d2.total + ' chunks<div class="progress-bar"><div class="progress-fill" style="width:' + (d2.progress*100) + '%"></div></div><button class="cancel-btn" onclick="kbCancel()">CANCEL</button></div>';
+            }
+          }
+          if (d2.complete) clearInterval(kbPollTimer);
+        } catch(e) {}
+      }, 2000);
+    }
+  } catch(e) { el.innerHTML = '<div class="empty">Error fetching article.</div>'; }
+}
+
+function kbCancel() {
+  if (kbMsgId) fetch('/api/transfer/' + kbMsgId + '/cancel', {method:'POST'});
+  if (kbPollTimer) clearInterval(kbPollTimer);
+  document.getElementById('kb-content').innerHTML = '<div class="empty">Transfer cancelled.</div>';
+}
+
+// === LLM ===
+let llmMsgId = null;
+let llmPollTimer = null;
+
+async function llmAsk() {
+  const q = document.getElementById('llm-query').value.trim();
+  if (!q) return;
+  const el = document.getElementById('llm-response');
+  el.innerHTML = '<div class="progress-container">Querying OVERSEER via LoRa...<div class="progress-bar"><div class="progress-fill" id="llm-progress" style="width:0%"></div></div><div id="llm-eta"></div><button class="cancel-btn" onclick="llmCancel()">CANCEL</button></div>';
+  try {
+    const r = await fetch('/api/llm/query', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q})});
+    const d = await r.json();
+    if (d.msg_id) {
+      llmMsgId = d.msg_id;
+      if (llmPollTimer) clearInterval(llmPollTimer);
+      llmPollTimer = setInterval(async () => {
+        try {
+          const r2 = await fetch('/api/transfer/' + llmMsgId);
+          const d2 = await r2.json();
+          const pBar = document.getElementById('llm-progress');
+          if (pBar) pBar.style.width = (d2.progress * 100) + '%';
+          // Progressive rendering
+          if (d2.data && d2.data.length > 0) {
+            el.innerHTML = '<div style="padding:10px;white-space:pre-wrap;">' + esc(d2.data) + '</div>';
+            if (!d2.complete) {
+              el.innerHTML += '<div class="progress-container">' + d2.received + '/' + d2.total + ' chunks<div class="progress-bar"><div class="progress-fill" style="width:' + (d2.progress*100) + '%"></div></div><button class="cancel-btn" onclick="llmCancel()">CANCEL</button></div>';
+            }
+          }
+          if (d2.complete) clearInterval(llmPollTimer);
+        } catch(e) {}
+      }, 2000);
+    } else {
+      el.innerHTML = '<div class="empty">LoRa not available.</div>';
+    }
+  } catch(e) { el.innerHTML = '<div class="empty">Error sending query.</div>'; }
+}
+
+function llmCancel() {
+  if (llmMsgId) fetch('/api/transfer/' + llmMsgId + '/cancel', {method:'POST'});
+  if (llmPollTimer) clearInterval(llmPollTimer);
+  document.getElementById('llm-response').innerHTML = '<div class="empty">Query cancelled.</div>';
+}
+
+// === INIT ===
+loadUsers();
+</script>
+</body>
+</html>
