@@ -5,8 +5,9 @@
 # ============================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-KIWIX="$SCRIPT_DIR/kiwix/kiwix-serve"
-ZIM_DIR="$SCRIPT_DIR/zim"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+KIWIX="$REPO_ROOT/kiwix/kiwix-serve"
+ZIM_DIR="$REPO_ROOT/zim"
 
 if [ ! -x "$KIWIX" ]; then
     echo "[!] kiwix-serve not found at $KIWIX"

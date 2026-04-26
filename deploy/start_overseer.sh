@@ -5,8 +5,9 @@
 # ============================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Start Kiwix in background
+# Start Kiwix in background (sibling script in deploy/)
 echo "Starting Kiwix..."
 "$SCRIPT_DIR/start_kiwix.sh" &
 KIWIX_PID=$!
@@ -19,9 +20,9 @@ if ! curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
     sleep 3
 fi
 
-# Start Flask server
+# Start Flask server (run from repo root so 'python -m server' resolves)
 echo "Starting OVERSEER server..."
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 python3 -m server
 
 # Cleanup on exit

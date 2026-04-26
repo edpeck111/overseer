@@ -2,8 +2,8 @@
 echo Starting kiwix-serve with all ZIM archives...
 echo.
 
-set KIWIX=%~dp0kiwix\kiwix-serve.exe
-set ZIM_DIR=%~dp0zim
+set KIWIX=%~dp0..\kiwix\kiwix-serve.exe
+set ZIM_DIR=%~dp0..\zim
 
 :: Build list of all .zim files
 setlocal enabledelayedexpansion

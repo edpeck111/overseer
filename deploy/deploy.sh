@@ -48,7 +48,7 @@ sudo systemctl restart "$SERVICE_NAME" 2>/dev/null && echo "SERVICE RESTARTED." 
     pkill -f "python.*-m server" 2>/dev/null || true
     sleep 1
     cd "$OVERSEER_DIR"
-    nohup bash -c './start_kiwix.sh & sleep 3 && python3 -m server' > /tmp/overseer.log 2>&1 &
+    nohup bash -c './deploy/start_kiwix.sh & sleep 3 && python3 -m server' > /tmp/overseer.log 2>&1 &
     echo "STARTED MANUALLY. Log: /tmp/overseer.log"
 }
 
