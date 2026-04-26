@@ -22,4 +22,4 @@
 
 /* Modules ---------------------------------------------------------- */
 @import "../modules/home.css";
-/* power.css imported by the POWER module commit immediately following. */
+@import "../modules/power.css";

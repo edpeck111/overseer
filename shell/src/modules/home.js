@@ -66,18 +66,17 @@ export function mountHome(root, store) {
   prompt.append(sigil, input, promptHint);
   screen.appendChild(prompt);
 
-  root.replaceChildren(screen);
+  // Initial active-class highlight from current module name. We don't
+  // subscribe to subsequent module changes here — the content router
+  // unmounts HOME entirely when leaving for another module, and
+  // remounts fresh on return.
+  const active = (store.get("module") || "HOME").toUpperCase();
+  for (const item of screen.querySelectorAll(".menu-item")) {
+    item.classList.toggle("active", item.dataset.name === active);
+  }
 
-  // Re-render on module change so HOME's active item highlights when
-  // the user navigates with hotkeys. Sprint 2+ adds richer reactivity.
-  const update = () => {
-    const active = (store.get("module") || "HOME").toUpperCase();
-    for (const item of screen.querySelectorAll(".menu-item")) {
-      item.classList.toggle("active", item.dataset.name === active);
-    }
-  };
-  store.subscribe("module", update);
-  update();
+  root.replaceChildren(screen);
+  return undefined;   // nothing to clean up
 }
 
 // --- helpers -------------------------------------------------------

@@ -1,25 +1,23 @@
-// Module placeholder view. Sprint 1 ships HOME for real and stubs every
-// other module. Each non-HOME module renders this card naming the
-// sprint that will replace the stub. Demonstrates routing works (the
-// breadcrumb and active menu item update) without misleading the user
-// about functionality that doesn't exist yet.
+// Module placeholder view. Modules that haven't shipped their real
+// implementation yet land here when the user activates their hotkey
+// — the breadcrumb and active menu item still update, the content
+// pane shows a card naming the sprint that will replace the stub.
 
 import { el, txt } from "../chrome/_dom.js";
 import { moduleById } from "./_registry.js";
 
 export function mountPlaceholder(root, store) {
-  const render = () => {
-    const id = (store.get("module") || "HOME").toLowerCase();
-    if (id === "home") return;  // HOME owns the content; do nothing.
-    const m = moduleById(id) || moduleById("home");
-    const wrap = el("div", "module-placeholder");
-    wrap.append(
-      el("div", "ph-name", txt(m.name)),
-      el("div", "ph-desc", txt(m.desc)),
-      el("div", "ph-line", txt(`scheduled for Sprint ${m.sprint}`)),
-      el("div", "ph-back", txt("press Q or H to return HOME · : for palette")),
-    );
-    root.replaceChildren(wrap);
+  const id = (store.get("module") || "HOME").toLowerCase();
+  const m = moduleById(id) || moduleById("home") || {
+    name: id.toUpperCase(), desc: "—", sprint: "?",
   };
-  store.subscribe("module", render);
+  const wrap = el("div", "module-placeholder");
+  wrap.append(
+    el("div", "ph-name", txt(m.name)),
+    el("div", "ph-desc", txt(m.desc)),
+    el("div", "ph-line", txt(`scheduled for Sprint ${m.sprint}`)),
+    el("div", "ph-back", txt("press Q or H to return HOME · : for palette")),
+  );
+  root.replaceChildren(wrap);
+  return undefined;
 }

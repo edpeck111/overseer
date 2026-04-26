@@ -1,7 +1,6 @@
-// Sprint 1+2 gate smoke test for the shell. jsdom + the built IIFE
-// bundle, simulating the Sprint 1 keystrokes plus the Sprint 2
-// transport/queue gate ('HOME's MESH indicator reacts to simulated
-// mesh health changes; optimistic action queues drain correctly').
+// Sprint 1+2+3 gate smoke test for the shell. jsdom + the built IIFE
+// bundle, simulating the keystrokes called out in each sprint's gate
+// plus exercising the POWER module's read-only canary path.
 //
 // Run from repo root or from shell/ — paths resolve relative to this
 // script, not cwd.
@@ -25,9 +24,36 @@ const { window } = dom;
 const { document } = window;
 window.addEventListener("error", (e) => console.error("[shell error]", e.message));
 
-// fetch() lives in node 22 globally, but jsdom's window doesn't have
-// it — give it a no-op so OmpTransport's heartbeat doesn't throw.
-window.fetch = () => Promise.reject(new Error("smoke: no network"));
+// jsdom doesn't ship fetch / WebSocket — supply mocks.
+const fakeResp = (data, status = 200) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json:  async () => data,
+  text:  async () => JSON.stringify(data),
+  arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(data)).buffer,
+});
+window.fetch = async (url) => {
+  const u = String(url);
+  if (u.includes("/api/p/now")) return fakeResp({
+    at: 1714086840, batt_pct: 82, draw_w: 4.2, draw_w_peak: 11.6,
+    input_w: 0, runtime_est_s: 1216260,
+    cpu: 7, ram: 61, ram_used_gb: 9.8, ram_total_gb: 16,
+    swap: 2, temp_c: 22, fan: 2100,
+    cycles: 238, health_pct: 96,
+  });
+  if (u.includes("/api/p/radio")) return fakeResp({
+    wifi: { ssid: "overseer-net", rssi_db: -42, clients: 6 },
+    lora: { freq_mhz: 868, state: "listening", pkts_per_h: 14 },
+    sdr:  { kind: "RTL.SDR", state: "idle", jobs: 0 },
+    bt:   { state: "disabled", reason: "power_save" },
+  });
+  if (u.includes("/api/p/storage")) return fakeResp({
+    used_gb: 412, total_gb: 512,
+    breakdown: { archives_gb: 142, models_gb: 14, system_gb: 6, other_gb: 250 },
+    smart_status: "healthy",
+  });
+  return fakeResp("not mocked", 404);
+};
 window.WebSocket = function () {
   this.readyState = 0;
   this.send = () => {};
@@ -43,7 +69,7 @@ await new Promise((r) => setTimeout(r, 50));
 const fail = (msg) => { console.error("FAIL:", msg); process.exit(1); };
 const pass = (msg) => console.log(" PASS:", msg);
 
-// ---- Sprint 1 chrome assertions (preserved) -----------------------
+// ---- Sprint 1 chrome assertions -----------------------------------
 const status = document.getElementById("statusbar");
 const segs   = status.querySelectorAll(".seg");
 if (segs.length !== 8) fail("status strip expected 8 segments, got " + segs.length);
@@ -99,9 +125,6 @@ if (!overseer || !overseer.store || !overseer.transport || !overseer.queue || !o
 }
 pass("transport stack constructed (store/transport/queue/dispatch attached)");
 
-// MESH indicator reacts to mesh state changes.
-// Re-query after each set: statusbar.js replaces children on re-render
-// so a cached node reference is detached after the first update.
 const meshDotsNow = () => {
   const seg = [...document.querySelectorAll(".statusbar .seg")].find(
     (s) => s.querySelector(".k") && s.querySelector(".k").textContent === "MESH",
@@ -113,46 +136,79 @@ if (meshDotsNow() === null) fail("MESH segment not found in status strip");
 overseer.store.set({ mesh: { reachable: 0, known: 3 } });
 await new Promise((r) => setTimeout(r, 5));
 const meshDotsOff = meshDotsNow();
-if (!meshDotsOff.includes("○") || meshDotsOff.includes("●")) {
-  fail(`MESH indicator did not flip to all-hollow on offline: "${meshDotsOff}"`);
-}
+if (!meshDotsOff.includes("○") || meshDotsOff.includes("●")) fail(`MESH offline: "${meshDotsOff}"`);
 pass(`MESH indicator on offline: "${meshDotsOff}"`);
 
 overseer.store.set({ mesh: { reachable: 3, known: 3 } });
 await new Promise((r) => setTimeout(r, 5));
 const meshDotsOn = meshDotsNow();
-if (!meshDotsOn.includes("●") || meshDotsOn.includes("○")) {
-  fail(`MESH indicator did not flip to all-filled on healthy: "${meshDotsOn}"`);
-}
+if (!meshDotsOn.includes("●") || meshDotsOn.includes("○")) fail(`MESH healthy: "${meshDotsOn}"`);
 pass(`MESH indicator on healthy: "${meshDotsOn}"`);
 
-// Optimistic action queue drains correctly when transport returns
 const t = overseer.transport;
-// Force the transport offline so next dispatch queues.
 t.healthState = "offline";
 let ran = [];
-const promise1 = overseer.dispatch({
-  optimistic: { _testFlag: 1 },
-  run: async () => { ran.push("a"); return "a"; },
-  reconcile: () => ({}),
-});
-const promise2 = overseer.dispatch({
-  optimistic: {},
-  run: async () => { ran.push("b"); return "b"; },
-});
+overseer.dispatch({ optimistic: { _testFlag: 1 }, run: async () => { ran.push("a"); return "a"; }, reconcile: () => ({}) });
+overseer.dispatch({ optimistic: {}, run: async () => { ran.push("b"); return "b"; } });
 await new Promise((r) => setTimeout(r, 10));
-if (ran.length !== 0) fail(`offline queue ran prematurely: ${ran}`);
-if (overseer.queue.size() !== 2) fail(`queue size expected 2, got ${overseer.queue.size()}`);
-pass(`offline queue holds 2 actions (size=${overseer.queue.size()}, ran=${ran.length})`);
+if (ran.length !== 0 || overseer.queue.size() !== 2) fail(`offline queue mis-state ran=${ran.length} sz=${overseer.queue.size()}`);
+pass(`offline queue holds 2 actions (size=2, ran=0)`);
 
-// Now flip transport back to "wifi" — onHealthRecovered should fire,
-// queue should drain in order.
 t._setHealth("wifi");
 await new Promise((r) => setTimeout(r, 50));
-if (ran.length !== 2 || ran[0] !== "a" || ran[1] !== "b") {
-  fail(`queue drained wrong: ${ran}`);
-}
+if (ran.length !== 2 || ran[0] !== "a" || ran[1] !== "b") fail(`queue drained wrong: ${ran}`);
 if (overseer.queue.size() !== 0) fail(`queue not emptied: size=${overseer.queue.size()}`);
 pass(`queue drained FIFO on recovery: ${ran.join(",")}`);
+
+// ---- Sprint 3 POWER module assertions ----------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "P" }));
+// Wait for /api/p/* fetch promises to resolve and tiles to repaint.
+await new Promise((r) => setTimeout(r, 80));
+
+const power = document.querySelector(".screen-power");
+if (!power) fail("POWER screen not mounted on 'P'");
+pass("press P then POWER screen mounts");
+
+const tiles = power.querySelectorAll(".tile");
+if (tiles.length !== 4) fail(`POWER expected 4 tiles, got ${tiles.length}`);
+pass(`POWER has ${tiles.length} tiles (BATTERY/LOAD/RADIO/STORAGE)`);
+
+// BATTERY tile should display the bignum value from the canned /api/p/now
+const battery = [...power.querySelectorAll(".tile")].find(
+  (t) => t.querySelector(".tile-title") && t.querySelector(".tile-title").textContent.includes("BATTERY"),
+);
+if (!battery) fail("BATTERY tile not found by title");
+const bignum = battery.querySelector(".bignum");
+if (!bignum || !bignum.textContent.includes("82")) fail(`BATTERY bignum text wrong: "${bignum && bignum.textContent}"`);
+pass(`BATTERY tile shows 82% from canned /api/p/now: "${bignum.textContent.trim()}"`);
+
+// LOAD tile should have CPU/RAM/SWAP bars
+const load = [...power.querySelectorAll(".tile")].find(
+  (t) => t.querySelector(".tile-title") && t.querySelector(".tile-title").textContent.includes("LOAD"),
+);
+if (!load) fail("LOAD tile not found");
+const bars = load.querySelectorAll(".bar");
+if (bars.length < 3) fail(`LOAD expected ≥3 bars, got ${bars.length}`);
+pass(`LOAD tile has ${bars.length} bars`);
+
+// RADIO + STORAGE tiles populated from their respective stub endpoints
+const radio = [...power.querySelectorAll(".tile")].find(
+  (t) => t.querySelector(".tile-title") && t.querySelector(".tile-title").textContent.includes("RADIO"),
+);
+if (!radio || !radio.textContent.includes("overseer-net")) fail("RADIO tile missing wifi ssid");
+pass("RADIO tile shows overseer-net WiFi");
+
+const storage = [...power.querySelectorAll(".tile")].find(
+  (t) => t.querySelector(".tile-title") && t.querySelector(".tile-title").textContent.includes("STORAGE"),
+);
+if (!storage || !storage.textContent.includes("412")) fail("STORAGE tile missing 412 GB");
+pass("STORAGE tile shows 412/512 GB used");
+
+// Q returns to HOME and unmounts POWER cleanly
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 10));
+if (document.querySelector(".screen-power")) fail("POWER did not unmount on Q");
+if (!document.querySelector(".screen-home")) fail("HOME did not remount on Q");
+pass("Q unmounts POWER and remounts HOME");
 
 console.log("\nALL CHECKS PASSED");
