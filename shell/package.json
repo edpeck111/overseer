@@ -6,9 +6,11 @@
   "description": "Static client bundle for OVERSEER v3 — preloaded once, state deltas over the wire.",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "watch": "node esbuild.config.mjs --watch"
+    "watch": "node esbuild.config.mjs --watch",
+    "smoke": "node ../tools/smoke-shell.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.21.0"
+    "esbuild": "^0.21.0",
+    "jsdom":   "^24.1.0"
   }
 }

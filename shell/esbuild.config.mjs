@@ -1,8 +1,6 @@
 // esbuild build for the OVERSEER v3 shell.
-// Bundles src/main.js (and the CSS graph it imports) into
-// public/dist/main.{js,css}. The browser entry is shell/public/index.html
-// so everything served lives under public/. Bundle target ≤ 2 MB gzipped
-// per implementation plan §5.
+// Bundles src/main.js into public/dist/main.{js,css}. Browser entry
+// is shell/public/index.html. Bundle target <= 2 MB gzipped per plan.
 
 import esbuild from "esbuild";
 
@@ -12,9 +10,18 @@ const ctx = await esbuild.context({
   entryPoints: ["src/main.js"],
   bundle: true,
   outdir: "public/dist",
-  format: "esm",
+  format: "iife",
   target: "es2022",
   sourcemap: true,
   minify: !watch,
   logLevel: "info",
-  loader: { ".svg": "file",
+  loader: { ".svg": "file", ".png": "file", ".woff2": "file" },
+});
+
+if (watch) {
+  await ctx.watch();
+  console.log("watching shell/src/...");
+} else {
+  await ctx.rebuild();
+  await ctx.dispose();
+}
