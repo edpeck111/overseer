@@ -1,0 +1,9 @@
+/* CSS custom properties — palette, typography, spacing.
+ * Sprint 1 populates these from docs/00-VISUAL-REFERENCE.html
+ * (the canonical visual reference). For now this file just holds the
+ * :root scaffold so component CSS can land without rewiring.
+ */
+
+:root {
+  /* Sprint 1: paste tokens here. Until then, modules ship without colour. */
+}
