@@ -1,0 +1,63 @@
+/* =====================================================================
+   Design tokens — single source of truth.
+   Lifted from Notes/00-VISUAL-REFERENCE.html and Notes/01-DESIGN-SPEC.md §4.
+   When `data-theme` flips on <html>, override these vars.
+   ===================================================================== */
+
+:root {
+  /* Backgrounds */
+  --bg-deep:        #050807;
+  --bg-panel:       #0a1410;
+  --bg-panel-hi:    #0f1d17;
+  --bg-strip:       #06120c;
+
+  /* Rules / borders */
+  --rule-dim:       #133021;
+  --rule:           #1f5538;
+  --rule-bright:    #2d7a4e;
+
+  /* Phosphor green (primary) */
+  --fg-dim:         #1d8c4a;
+  --fg:             #2cc26a;
+  --fg-bright:      #5fff9b;
+  --fg-glow:        #b8ffd2;
+
+  /* Accents */
+  --amber:          #ffb849;
+  --amber-bright:   #ffd27a;
+  --red:            #ff4747;
+  --red-bright:     #ff8585;
+  --cyan:           #4adfff;
+  --cyan-bright:    #8ff0ff;
+  --magenta:        #ff5fb8;
+  --violet:         #b58cff;
+  --paper:          #d8e8d8;
+
+  /* Type */
+  --char-w:         clamp(7px, 1.45vw, 11px);
+  --line-h:         1.55;
+
+  /* Glow */
+  --glow-soft:      0 0 6px rgba(95,255,155,0.25), 0 0 14px rgba(95,255,155,0.08);
+  --glow-strong:    0 0 4px rgba(184,255,210,0.55), 0 0 12px rgba(95,255,155,0.35);
+}
+
+/* Per-module accent shifts (from 01-DESIGN-SPEC §4.2).
+   Each module sets data-module="..." on its container; its CSS reads these. */
+
+[data-module="comms"]      { --accent: var(--cyan-bright); }
+[data-module="medical"]    { --accent: var(--red-bright); }
+[data-module="navigation"] { --accent: var(--cyan); }
+[data-module="signal"]     { --accent: var(--magenta); }
+[data-module="auspice"]    { --accent: var(--violet); }
+[data-module="knowledge"], [data-module="power"], [data-module="log"],
+[data-module="inventory"], [data-module="recreation"], [data-module="timeline"],
+[data-module="system"], [data-module="help"] {
+  --accent: var(--amber);
+}
+
+/* Future themes (Sprint 15: SYSTEM polish) — empty stubs so the wiring is in place. */
+[data-theme="amber"]   { /* override here */ }
+[data-theme="ibm"]     { }
+[data-theme="paper"]   { }
+[data-theme="acid"]    { }

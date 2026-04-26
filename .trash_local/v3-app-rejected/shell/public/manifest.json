@@ -1,0 +1,10 @@
+{
+  "name": "OVERSEER",
+  "short_name": "OVERSEER",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050807",
+  "theme_color": "#050807",
+  "description": "Offline Vault of Essential Records for Survival, Emergency & Endurance Response.",
+  "icons": []
+}

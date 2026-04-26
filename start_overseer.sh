@@ -22,7 +22,7 @@ fi
 # Start Flask server
 echo "Starting OVERSEER server..."
 cd "$SCRIPT_DIR"
-python3 server.py
+python3 -m server
 
 # Cleanup on exit
 kill $KIWIX_PID 2>/dev/null

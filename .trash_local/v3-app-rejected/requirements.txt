@@ -1,0 +1,7 @@
+flask>=3.0
+flask-sock>=0.7
+msgpack>=1.0
+brotli>=1.1
+cryptography>=42.0
+PyNaCl>=1.5
+requests>=2.31
