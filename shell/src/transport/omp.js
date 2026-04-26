@@ -95,7 +95,7 @@ export class OmpTransport {
 
   async _roundtrip(op, payload) {
     const msgId = this._nextMsgId();
-    const pkt = encode(op, msgId, payload);
+    const pkt = await encode(op, msgId, payload);
     let res;
     try {
       res = await fetch(this.bridgeUrl, {
@@ -112,7 +112,7 @@ export class OmpTransport {
       throw new Error(`OMP bridge ${this.bridgeUrl} -> ${res.status}`);
     }
     const buf = new Uint8Array(await res.arrayBuffer());
-    const { op: respOp, msgId: respId, payload: respPayload } = decode(buf);
+    const { op: respOp, msgId: respId, payload: respPayload } = await decode(buf);
     if (respId !== msgId) {
       throw new Error(`OMP msg_id mismatch: req=${msgId} resp=${respId}`);
     }

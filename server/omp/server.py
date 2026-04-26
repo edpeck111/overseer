@@ -118,7 +118,11 @@ def omp_endpoint():
     if isinstance(response, dict) and "op" in response and isinstance(response["op"], int):
         out_op = response.pop("op")
 
-    body = encode(out_op, msg_id, response)
+    # Echo the request's wire version so JS clients (Sprint 4: v0x01 only,
+    # ADR-0010) get an uncompressed response while Cardputer clients
+    # (future) get the compressed v0x02 path.
+    req_version = request.get_data()[0] if request.get_data() else 0x02
+    body = encode(out_op, msg_id, response, version=req_version)
     return Response(body, mimetype="application/octet-stream")
 
 

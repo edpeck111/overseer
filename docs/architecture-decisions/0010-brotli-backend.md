@@ -16,7 +16,7 @@ responses — the question for Sprint 4 was how to put it on the wire.
 
 ## Decision
 
-**Backends:** `brotlicffi` server-side, `brotli-wasm` browser-side.
+**Backends:** `brotlicffi` server-side, `brotli-wasm` browser-side (lazy init).
 `brotlicffi` is preferred over `Brotli` (Mozilla) because the CFFI
 interface lets us extend the FFI with the missing dict entry points
 without recompiling. `brotli-wasm` natively supports
@@ -90,3 +90,32 @@ gain (the dict only kicks in when both sides can decode it; until both
 sides do, the wire reverts to raw-Brotli regardless). A focused
 follow-on commit that does only the FFI shim — with proper byte-level
 test vectors — is the cleaner path.
+
+## Sprint 4 implementation note
+
+After two evaluation passes (`brotli-wasm`, then native
+`CompressionStream`), Sprint 4 ships an asymmetric Brotli setup:
+
+  - **Server-side encodes v0x02 (Brotli) by default**, decodes both
+    v0x01 and v0x02. brotlicffi handles raw Brotli without dict.
+  - **Browser bundle stays v0x01** (raw MessagePack). esbuild iife
+    can't easily dynamic-split brotli-wasm, and shipping it eagerly
+    pulls ~150 KB into the bundle for a path the WiFi-shell never
+    uses (HTTP/JSON is the WiFi path). The Cardputer-served shell
+    (Sprint 11+) gets its own bundle that adds v0x02 then.
+  - **Server omp_endpoint echoes the request's wire version**, so JS
+    clients sending v0x01 get v0x01 replies; future Cardputer clients
+    sending v0x02 get v0x02 replies. No client misalignment.
+
+Native `CompressionStream("br")` was rejected because the format name
+diverges (browsers: `"br"`, Node 22 sandbox: `"brotli"`), making
+feature-detection brittle. When the Web Compression Streams Level 2
+draft (with shared-dictionary support) ships uniformly, we revisit:
+the JS side migrates to native, the bundle drops brotli-wasm, the
+Cardputer bundle gets dict-on-the-wire, and (with the matching Python
+ctypes shim) server-side dict-Brotli goes live.
+
+Bandwidth-budget impact: Sprint 4 LoRa-bound traffic (server →
+Cardputer) gets full compression (40-70% reduction on typical
+payloads). WiFi-bound traffic stays uncompressed — the LAN bandwidth
+savings would be marginal anyway.
