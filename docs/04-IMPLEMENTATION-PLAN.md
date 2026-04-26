@@ -207,6 +207,11 @@ Before more modules, harden the shell-vs-API split.
 - Offline mode: shell loads + works with cached data when OPi5 unreachable
 - Cardputer flash image: same shell + a stub OMP bridge
 - Sample remote-operator session on the mesh simulator
+- **Port `docs/sextant_render.py` to `shell/src/sextant/`** (rasterizer
+  + binarization helpers). Per ADR-0009 the sextant rasterizer is a
+  shared system-wide primitive; Sprint 4 is when it joins the bundle
+  so subsequent module sprints (NAVIGATION 8/8a, AUSPICE 12-13,
+  SIGNAL 14, etc.) can import it without each porting their own copy.
 
 **Gate:** disconnect phone from OPi5; UI still loads, shows cached data with `as-of` stamps, queues outbound actions; reconnect and queue drains.
 

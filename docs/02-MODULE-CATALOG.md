@@ -31,6 +31,8 @@
 
 ## (K) KNOWLEDGE
 
+*Visualization: branch tree visualization (Branches sub-screen) via `shell/src/sextant/` (ADR-0009).*
+
 **Purpose:** LLM chat with RAG + browsable offline knowledge base. The flagship module.
 
 ### Sub-screens
@@ -220,6 +222,8 @@ POST   /api/c/net/scan                    trigger rescan
 
 ## (M) MEDICAL
 
+*Visualization: leans on `shell/src/sextant/` for body diagrams (ADR-0009).*
+
 **Purpose:** Field medical reference + guided triage. Mostly works offline — no LLM required.
 
 ### Sub-screens
@@ -361,6 +365,8 @@ POST   /api/m/photo                       multipart camera capture, returns VLM 
 ---
 
 ## (N) NAVIGATION
+
+*Visualization: the heaviest user of `shell/src/sextant/` — text-map renderer with hillshading, contours, viewshed, OS grid (ADR-0009).*
 
 **Purpose:** Waypoints, routing, offline maps, distance/bearing math.
 
@@ -511,6 +517,8 @@ GET    /api/p/health              SMART, fan, anomalies
 
 ## (L) LOG **NEW**
 
+*Visualization: optional daily-density heatmap via `shell/src/sextant/` (ADR-0009).*
+
 **Purpose:** Daily journal + system event timeline. The single most-requested feature for any prepper system, missing from v2.
 
 ### Sub-screens
@@ -596,6 +604,8 @@ GET    /api/l/export?from=…&to=…&fmt=md
 ---
 
 ## (I) INVENTORY **NEW**
+
+*Visualization: cache fill heatmaps + pack-optimizer footprint maps via `shell/src/sextant/` (ADR-0009).*
 
 **Purpose:** Track kit, food, water, ammo, meds, fuel. Predict depletion. Alert on expiry.
 
@@ -778,6 +788,8 @@ POST   /api/r/reader/progress
 
 ## (S) SIGNAL **NEW**
 
+*Visualization: spectrum waterfalls + antenna patterns + NOAA APT decoded frames + ADS-B glyphs via `shell/src/sextant/` (ADR-0009).*
+
 **Purpose:** SDR + LoRa + comms scanning. Cyberpunk slot of the system.
 
 ### Sub-screens
@@ -843,6 +855,8 @@ GET    /api/s/captures              listing
 ---
 
 ## (T) TIMELINE **NEW**
+
+*Visualization: per-day event-density bands via `shell/src/sextant/` (ADR-0009).*
 
 **Purpose:** Unified chronological view of *everything*. Comms, log entries, triage events, waypoints added, system alerts, games played, power events. Searchable, filterable. After-action review tool.
 
@@ -962,6 +976,8 @@ POST   /api/x/shutdown              with confirmation
 ---
 
 ## (U) AUSPICE — astronomy + divination + encrypted journal **NEW** (Sprints 12-13)
+
+*Visualization: moon phases, hexagram glyphs, tarot card art, birth-chart wheel, year-wheel sabbats — all via `shell/src/sextant/` (ADR-0009).*
 
 Full spec: `AUSPICE-MODULE-SPEC.md`.
 
