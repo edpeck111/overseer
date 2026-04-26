@@ -1,0 +1,33 @@
+.hotkeybar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-strip);
+  border-top: 1px solid var(--rule-bright);
+  padding: 6px 10px;
+  font-size: 0.92em;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.hotkeybar::-webkit-scrollbar { display: none; }
+
+.hotkeybar .key {
+  padding: 0 8px 0 4px;
+  color: var(--fg);
+  border-right: 1px dashed var(--rule);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.hotkeybar .key:last-child { border-right: 0; }
+.hotkeybar .key .k {
+  color: var(--bg-deep);
+  background: var(--fg);
+  padding: 0 5px;
+  font-weight: 700;
+  border-radius: 1px;
+}
+.hotkeybar .key .l         { color: var(--fg-dim); }
+.hotkeybar .key.special .k { background: var(--amber); }
+.hotkeybar .key.danger .k  { background: var(--red); color: var(--bg-deep); }
