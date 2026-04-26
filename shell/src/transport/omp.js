@@ -40,11 +40,16 @@ export class OmpTransport {
     this.cache     = new Map();
     /** @type {Map<string, {fn: Function, timer: any}>} */
     this.subs      = new Map();
+    this._healthRecoveredCbs = [];
     this._heartbeat(heartbeatMs);
   }
 
   kind()   { return KIND; }
   health() { return this.healthState; }
+  onHealthRecovered(fn) { this._healthRecoveredCbs.push(fn); return () => {
+    const i = this._healthRecoveredCbs.indexOf(fn);
+    if (i >= 0) this._healthRecoveredCbs.splice(i, 1);
+  }; }
 
   /** request(method, path, body?, { cacheClass = "WARM" }) */
   async request(method, path, body, opts = {}) {
@@ -130,12 +135,18 @@ export class OmpTransport {
   }
 
   _setHealth(s) {
-    if (this.healthState === s) return;
+    const prev = this.healthState;
+    if (prev === s) return;
     this.healthState = s;
     if (this.store) {
       const known = this.store.get("mesh")?.known ?? 1;
       const reachable = s === "mesh" ? known : 0;
       this.store.set({ mesh: { reachable, known } });
+    }
+    if (prev === "offline" && (s === "mesh" || s === "wifi")) {
+      for (const fn of this._healthRecoveredCbs) {
+        try { fn(); } catch { /* ignore */ }
+      }
     }
   }
 

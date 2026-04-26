@@ -25,11 +25,17 @@ export class HttpTransport {
     /** @type {Map<string, Set<Function>>} */
     this.subs = new Map();
     this._wsBuffer = [];
+    this._healthRecoveredCbs = [];
     this._connectWs();
   }
 
   kind()   { return KIND; }
   health() { return this.healthState; }
+  /** Register a fn called when health flips from "offline" to up. */
+  onHealthRecovered(fn) { this._healthRecoveredCbs.push(fn); return () => {
+    const i = this._healthRecoveredCbs.indexOf(fn);
+    if (i >= 0) this._healthRecoveredCbs.splice(i, 1);
+  }; }
 
   /** request(method, path, body?, { cacheClass = "WARM", signal? }) */
   async request(method, path, body, opts = {}) {
@@ -127,13 +133,18 @@ export class HttpTransport {
   }
 
   _setHealth(s) {
-    if (this.healthState === s) return;
+    const prev = this.healthState;
+    if (prev === s) return;
     this.healthState = s;
     if (this.store) {
-      // Surface to status strip's MESH indicator
       const isUp = s === "wifi";
       this.store.set({ mesh: { reachable: isUp ? this.store.get("mesh")?.known ?? 1 : 0,
                                 known:     this.store.get("mesh")?.known ?? 1 } });
+    }
+    if (prev === "offline" && (s === "wifi" || s === "mesh")) {
+      for (const fn of this._healthRecoveredCbs) {
+        try { fn(); } catch { /* ignore */ }
+      }
     }
   }
 }
