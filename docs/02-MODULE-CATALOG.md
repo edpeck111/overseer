@@ -22,6 +22,7 @@
 | T | Timeline | **NEW** |
 | X | System | Refined (admin) |
 | ? | Help & Xtras | **NEW** |
+| U | AUSPICE | **NEW** (Sprints 12-13) |
 | (optional) | Intel | **NEW** later |
 | (optional) | Ritual | **NEW** later |
 | (optional) | Archive | **NEW** later |
@@ -957,6 +958,31 @@ POST   /api/x/plugins/:id/toggle
 GET    /api/x/logs?service=…&tail=N
 POST   /api/x/shutdown              with confirmation
 ```
+
+---
+
+## (U) AUSPICE — astronomy + divination + encrypted journal **NEW** (Sprints 12-13)
+
+Full spec: `AUSPICE-MODULE-SPEC.md`.
+
+Sub-screens: SKY, CHART, TAROT, ORACLE, DAILY, JOURNAL, ALMANAC. Theme
+ships a per-module purple accent shift (only AUSPICE touches the
+phosphor base).
+
+The module is split across two sprints — Sprint 12 (Part A: astronomy
+and reference content) and Sprint 13 (Part B: divination engines and
+the encrypted journal). The previously-planned standalone Sprint A/B/C
+track is superseded; see `04-IMPLEMENTATION-PLAN.md` Sprints 12-13 for
+the inlined plan.
+
+Notable cross-module wires:
+
+- ALMANAC events (sabbats, lunar phases, eclipses) feed TIMELINE
+  (Sprint 11) once that module is live.
+- TAROT reader↔querent uses the COMMS transport (Sprint 6).
+- Journal encryption is its own at-rest layer — distinct from LOG's
+  daily-journal table — so it can be reused by any future module that
+  needs operator-PIN-gated storage.
 
 ---
 

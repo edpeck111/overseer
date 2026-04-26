@@ -901,6 +901,14 @@ The `0x76 CHART_SHARE` is a privacy-sensitive opcode — birth data is personal.
 
 ## 12. Build priority
 
+> **Superseded.** The Sprint A/B/C track described below is no longer
+> the canonical plan. AUSPICE is now inlined into the main 16-sprint
+> sequence as **Sprints 12 (Part A) and 13 (Part B)**. See
+> `04-IMPLEMENTATION-PLAN.md` for the up-to-date sprint roadmap with
+> renumbered downstream sprints. The deliverable list below is still
+> correct as a *content* breakdown; only the sprint labels change.
+
+
 Two sprints likely.
 
 **Sprint A — astronomy and references (~2 weeks)**

@@ -299,7 +299,55 @@ Before more modules, harden the shell-vs-API split.
 
 **Gate:** view 72h timeline showing entries from at least 5 different modules; filter by kind; export to markdown.
 
-### Sprint 12 — SIGNAL
+### Sprint 12 — AUSPICE part A: astronomy + references
+
+AUSPICE is the astronomy + tarot/oracle + encrypted-journal module
+(hotkey `(U)`, see `02-MODULE-CATALOG.md` and `AUSPICE-MODULE-SPEC.md`).
+It was previously planned as a separate Sprint A/B/C track outside the
+main 16-sprint sequence; that track is now superseded — AUSPICE
+inlines here as Sprints 12 and 13 so it gets the same review and
+release cadence as every other module.
+
+Why slot AUSPICE after Sprint 11 (TIMELINE): AUSPICE's ALMANAC produces
+events (sabbats, lunar phases, eclipses) that join the cross-module
+event stream TIMELINE provides. Building AUSPICE *after* TIMELINE means
+ALMANAC entries can be visible from the unified 72-hour view on day
+one rather than via a backfill. The journal-encryption layer is
+deliberately separate from LOG's daily-journal table so we do not need
+to land them adjacently.
+
+Sprint 12 ships:
+
+- SKY (Skyfield + DE440 ephemeris) — moon phase, planetary positions, sunrise/sunset, eclipses
+- CHART (Western tropical natal charts) — sun/moon/asc + 10 placements
+- ALMANAC (year wheel + lunar calendar + sabbats), feeding TIMELINE
+- Astrology reference text — sun-in-sign, moon-in-sign, ascendant, common aspects, hand-authored from Lilly + modern PD sources
+- Purple sub-theme tokens (per module spec §2)
+
+**Gate:** open AUSPICE, see today's astronomy correctly, generate a
+natal chart from a known date, see at least one ALMANAC event flow
+into the TIMELINE module's view.
+
+### Sprint 13 — AUSPICE part B: divination + journal
+
+- Deck format + Rider-Waite-Smith deck (78 cards, hand-authored)
+- Spread engine + 8 standard spreads
+- TAROT solo screen
+- ORACLE engine + I Ching (Wilhelm + Legge texts, 64 hexagrams)
+- Other oracles: runes, Lenormand, geomancy, lunar mansions, Ogham, Sortes
+- JOURNAL with at-rest encryption + per-operator PIN flow + overseer reset path (AES-256-GCM, PBKDF2-HMAC-SHA256 600k iter, recovery key)
+- DAILY screen (card-of-the-day + moon-of-the-day + journal prompt)
+- COMMS reader↔querent flow (Sprint 6 transport reused)
+
+**Gate:** unlock the journal with a PIN, write an encrypted entry,
+restart the server and decrypt it; pull a tarot reading on one
+operator and have a remote operator render the same spread via the
+mesh; perform an overseer PIN reset and recover access.
+
+(AUSPICE Part C — Vedic system, deck-builder tool, themed decks — stays
+optional and lands post-Sprint 17 alongside other polish work.)
+
+### Sprint 14 — SIGNAL
 
 - LoRa daemon integration (meshtasticd already running)
 - Mesh node detail (extends Comms net pane)
@@ -312,7 +360,7 @@ Before more modules, harden the shell-vs-API split.
 
 **Gate:** spectrum waterfall shows real LoRa traffic; mesh nodes update live with RSSI; NOAA pass schedule visible.
 
-### Sprint 13 — RECREATION foundation
+### Sprint 15 — RECREATION foundation
 
 - Game registry + harness
 - Fortune
@@ -323,7 +371,7 @@ Before more modules, harden the shell-vs-API split.
 
 **Gate:** play chess against the AI; read a Gutenberg book over multiple sessions with progress saved.
 
-### Sprint 14 — RECREATION: Dragon's Tale
+### Sprint 16 — RECREATION: Dragon's Tale
 
 Its own sprint because of multiplayer complexity.
 
@@ -337,7 +385,7 @@ Its own sprint because of multiplayer complexity.
 
 **Gate:** two simulated operators reach level 5, fight each other in the forest, one wins gold from the other, state syncs both ways.
 
-### Sprint 15 — SYSTEM polish + HELP
+### Sprint 17 — SYSTEM polish + HELP
 
 - Themes (5 presets)
 - Font switcher
@@ -349,7 +397,7 @@ Its own sprint because of multiplayer complexity.
 
 **Gate:** switch theme, restore from snapshot, write a tiny plugin and hot-reload it, find the easter eggs.
 
-### Sprint 16+ — Polish, optional modules, hardware integration
+### Sprint 18+ — Polish, optional modules, hardware integration
 
 - Cardputer firmware (Ted's domain; backend cooperates)
 - M5StickC PLUS2 firmware (status display)
