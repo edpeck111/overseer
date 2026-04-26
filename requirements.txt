@@ -1,0 +1,13 @@
+# OVERSEER v3 runtime — pinning policy: lower bound on minor for stability,
+# upper bound where API churn matters.
+
+# ---- v2 runtime (kept for legacy_server.py until refactor lands) ----
+flask>=3.0,<4
+requests>=2.31,<3
+psutil>=5.9
+cryptography>=42
+
+# ---- v3 additions ----
+flask-sock>=0.7         # WebSocket hub (Sprint 2)
+msgpack>=1.0            # OMP body codec (Sprint 2)
+brotli>=1.1             # OMP envelope compression (Sprint 2)

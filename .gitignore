@@ -1,6 +1,26 @@
+# v2 entries (preserved)
 overseer.db
 keys/*_private.pem
 __pycache__/
 zim/
 kiwix/
 .claude/
+
+# v3 additions
+.trash_local/
+data/
+shell/dist/
+shell/node_modules/
+node_modules/
+*.sqlite
+*.sqlite-journal
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.pre-commit-cache/
+
+# editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/

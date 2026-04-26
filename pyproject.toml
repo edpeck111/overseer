@@ -1,0 +1,40 @@
+# OVERSEER v3 — Python project metadata + tool config.
+# Runtime requirements live in requirements.txt; this file is for tooling.
+
+[project]
+name = "overseer"
+version = "3.0.0-dev0"
+description = "Mesh-native prepper intelligence system. v3-redesign."
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+readme = "README.md"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+    "legacy_server.py",   # v2, scheduled for split into server/modules/* in later sprints
+    ".trash_local",
+    "shell/dist",
+    "data",
+    "kiwix",
+    "zim",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM"]
+ignore = ["E501"]  # line length is governed by formatter
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+include = ["server", "tools"]
+exclude = ["legacy_server.py", ".trash_local", "data", "shell"]
+reportMissingImports = "warning"
+reportMissingTypeStubs = "none"
+pythonVersion = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
