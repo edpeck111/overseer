@@ -9,6 +9,9 @@
     "watch": "node esbuild.config.mjs --watch",
     "smoke": "node ../tools/smoke-shell.mjs"
   },
+  "dependencies": {
+    "msgpackr": "^1.10.0"
+  },
   "devDependencies": {
     "esbuild": "^0.21.0",
     "jsdom":   "^24.1.0"

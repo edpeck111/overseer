@@ -11,6 +11,7 @@ kiwix/
 .trash_local/
 data/
 shell/dist/
+shell/public/dist/
 shell/node_modules/
 node_modules/
 *.sqlite
@@ -21,6 +22,3 @@ node_modules/
 .pre-commit-cache/
 
 # editor / OS
-.DS_Store
-*.swp
-.i
