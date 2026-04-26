@@ -3,7 +3,8 @@
  * into dist/main.css.
  *
  * Component CSS is co-located with the component (chrome/, palette/,
- * modules/) and pulled in here so order is explicit and predictable. */
+ * components/, modules/) and pulled in here so order is explicit and
+ * predictable. */
 
 @import "./tokens.css";
 @import "./base.css";
@@ -16,5 +17,9 @@
 /* Overlays (Sprint 1) --------------------------------------------- */
 @import "../palette/palette.css";
 
-/* Modules (Sprint 1: HOME only; later sprints add others) --------- */
+/* Reusable dashboard primitives (Sprint 3) ----------------------- */
+@import "../components/components.css";
+
+/* Modules ---------------------------------------------------------- */
 @import "../modules/home.css";
+/* power.css imported by the POWER module commit immediately following. */
