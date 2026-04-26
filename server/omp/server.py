@@ -84,16 +84,10 @@ def _net_nodes(_payload):
 
 @handler(Op.POWER_NOW)
 def _power_now(_payload):
-    # Sprint 3 replaces with a real reading off psutil + jackery.
-    return {
-        "batt_pct":   82,
-        "draw_w":     4.2,
-        "runtime_est_s": 14*86400 + 2*3600 + 11*60,
-        "cpu":        7,
-        "ram":        61,
-        "temp_c":     22,
-        "fan":        2100,
-    }
+    # Sprint 3: synthetic source via server.modules.power. Sprint 4 wires
+    # WS push from the same source; the OMP roundtrip stays available.
+    from server.modules.power import read_sample
+    return read_sample().to_wire()
 
 
 # -------------------------- Flask wiring ------------------------------
