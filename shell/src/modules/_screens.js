@@ -5,10 +5,12 @@
 
 import { mountHome }  from "./home.js";
 import { mountPower } from "./power.js";
+import { mountKnowledge } from "./knowledge.js";
 
 /** @type {Record<string, (root: HTMLElement, store: any, ctx: any) => (() => void) | undefined>} */
 export const SCREENS = {
   HOME:  mountHome,
   POWER: mountPower,
+  KNOWLEDGE: mountKnowledge,
   // KNOWLEDGE, COMMS, ... land in their respective sprints
 };

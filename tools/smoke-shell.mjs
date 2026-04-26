@@ -52,6 +52,19 @@ window.fetch = async (url) => {
     breakdown: { archives_gb: 142, models_gb: 14, system_gb: 6, other_gb: 250 },
     smart_status: "healthy",
   });
+  if (u.endsWith("/api/k/library/archives")) return fakeResp([
+    { key: "wikem_en_all", label: "WikEM", desc: "Emergency medicine", size_gb: 0.6, articles: 2 },
+    { key: "ifixit_en_all", label: "iFixit", desc: "Repair guides", size_gb: 1.2, articles: 1 },
+  ]);
+  if (u.includes("/api/k/library/articles")) return fakeResp([
+    { id: "Water_purification", title: "Water purification" },
+    { id: "Tourniquet_application", title: "Tourniquet application" },
+  ]);
+  if (u.includes("/api/k/library/article")) return fakeResp({
+    archive: "wikem_en_all", id: "Water_purification", title: "Water purification",
+    paragraphs: ["Filter through cloth.", "Boil one minute.", "Bleach: 8 drops/gallon."],
+  });
+  if (u.includes("/api/k/branches")) return fakeResp({ roots: [] });
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -225,5 +238,45 @@ await new Promise((r) => setTimeout(r, 10));
 if (document.querySelector(".screen-power")) fail("POWER did not unmount on Q");
 if (!document.querySelector(".screen-home")) fail("HOME did not remount on Q");
 pass("Q unmounts POWER and remounts HOME");
+
+
+// ---- Sprint 5 KNOWLEDGE module assertions ------------------------
+// Press Q to return HOME first (smoke is currently in HOME from the
+// "Q unmounts POWER" check). Then K → KNOWLEDGE mounts.
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "K" }));
+await new Promise((r) => setTimeout(r, 50));
+const kb = document.querySelector(".screen-knowledge");
+if (!kb) fail("KNOWLEDGE screen not mounted on K");
+pass("press K then KNOWLEDGE screen mounts");
+
+const tabs = kb.querySelectorAll(".kb-tab");
+if (tabs.length !== 3) fail(`KNOWLEDGE expected 3 tabs (C/L/B), got ${tabs.length}`);
+pass(`KNOWLEDGE has ${tabs.length} sub-screen tabs`);
+
+// Default sub-screen is chat — input + log present.
+if (!kb.querySelector(".kb-log") || !kb.querySelector(".kb-input")) fail("chat sub-screen missing log/input");
+pass("KNOWLEDGE chat sub-screen has log + input");
+
+// Switch to library (clicking the second tab is the most direct path)
+tabs[1].click();
+await new Promise((r) => setTimeout(r, 50));
+const miller = kb.querySelector(".kb-miller");
+if (!miller) fail("library Miller columns not mounted on tab switch");
+const cols = miller.querySelectorAll(".kb-col");
+if (cols.length !== 3) fail(`library expected 3 cols, got ${cols.length}`);
+pass(`library Miller columns has ${cols.length} cols (archives | articles | preview)`);
+
+// Archives populated from /api/k/library/archives mock
+await new Promise((r) => setTimeout(r, 30));
+const items = miller.querySelectorAll(".kb-col:first-child .kb-item");
+if (items.length < 2) fail(`archive list expected ≥2 items, got ${items.length}`);
+pass(`library shows ${items.length} archives from mocked /api/k/library/archives`);
+
+// Branches sub-screen
+tabs[2].click();
+await new Promise((r) => setTimeout(r, 30));
+const tree = kb.querySelector(".kb-tree");
+if (!tree) fail("branches tree node not mounted");
+pass("branches sub-screen mounts (tree present)");
 
 console.log("\nALL CHECKS PASSED");
