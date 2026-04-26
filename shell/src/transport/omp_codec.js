@@ -20,7 +20,7 @@ export const HEADER_LEN = 4;
 
 /** Encode (op, msgId, payload) into an OMP packet (Uint8Array). */
 export async function encode(op, msgId, payload, { version = VERSION, dictionary } = {}) {
-  if (!(op >= 0 && op < 0x80)) throw new Error(`op out of range: ${op}`);
+  if (!(op >= 0 && op < 0x100)) throw new Error(`op out of range: ${op}`);
   if (!(msgId >= 0 && msgId < 0x10000)) throw new Error(`msg_id out of range: ${msgId}`);
   if (version !== VERSION) {
     throw new Error(
@@ -51,9 +51,10 @@ export async function decode(packet) {
     );
   }
   if (ver !== VERSION) throw new Error(`unsupported OMP version 0x${ver.toString(16)}`);
-  const opByte = view.getUint8(1);
-  if (isFragment(opByte)) throw new Error("fragmented OMP packets — Sprint 12");
-  const op = realOp(opByte);
+  // 05-OMP-PROTOCOL §1.2 / §3 byte-range gap — see codec.py for the
+  // full discussion. Sprint 4 reads the full byte as the opcode;
+  // fragmentation revisits in Sprint 12 with LoRa hardware.
+  const op = view.getUint8(1);
   const msgId = view.getUint16(2, false);
   const body = new Uint8Array(packet.buffer, packet.byteOffset + HEADER_LEN, packet.byteLength - HEADER_LEN);
   const payload = unpack(body);

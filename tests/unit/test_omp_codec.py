@@ -43,10 +43,17 @@ def test_msg_id_big_endian():
 
 
 def test_op_out_of_range_rejected():
+    """Opcodes go 0x00..0xFF (full byte). 0x80 is a real range start
+    (POWER, SYSTEM). Fragmentation marker placement is deferred to
+    Sprint 12 — see codec.py for the spec-gap discussion."""
     with pytest.raises(ValueError):
         encode(0x100, 1, {})
     with pytest.raises(ValueError):
-        encode(0x80, 1, {})  # fragment bit not allowed in encode
+        encode(-1, 1, {})
+    # 0x80 is now valid — POWER (0x90) etc. live in the upper half.
+    pkt = encode(0x90, 1, {})
+    op, _, _ = decode(pkt)
+    assert op == 0x90
 
 
 def test_msg_id_out_of_range_rejected():
@@ -67,11 +74,15 @@ def test_unknown_version_rejected():
         decode(fake)
 
 
-def test_fragment_bit_rejected_on_decode():
-    # Manually construct a fragment-marked packet
-    fake = bytes([VERSION, Op.PING | 0x80, 0x00, 0x01]) + b"\x80"
-    with pytest.raises(NotImplementedError, match="fragment"):
-        decode(fake)
+def test_high_bit_op_decodes_as_real_opcode():
+    """Per the Sprint-4 codec note: opcodes ≥ 0x80 are real (POWER 0x90,
+    SYSTEM 0xA0, etc.) and get decoded as-is. Fragmentation marker
+    placement is deferred to Sprint 12 with LoRa hardware."""
+    pkt = encode(Op.SYS_STATUS, 5, {"hello": 1})
+    op, msg_id, body = decode(pkt)
+    assert op == Op.SYS_STATUS == 0xA0
+    assert msg_id == 5
+    assert body == {"hello": 1}
 
 
 def test_default_version_is_compressed():

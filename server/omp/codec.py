@@ -54,8 +54,8 @@ def encode(
     dictionary: bytes | None = None,
 ) -> bytes:
     """Encode one OMP packet at the given wire version."""
-    if not (0 <= int(op) < 0x80):
-        raise ValueError(f"op out of range or fragment-bit set: {op:#x}")
+    if not (0 <= int(op) < 0x100):
+        raise ValueError(f"op out of byte range: {op:#x}")
     if not (0 <= msg_id < 0x10000):
         raise ValueError(f"msg_id out of range: {msg_id}")
     body = msgpack.packb(payload, use_bin_type=True)
@@ -82,11 +82,13 @@ def decode(
     ver, op_byte, msg_id = _HEADER.unpack_from(packet, 0)
     if ver not in (VERSION, LEGACY_VERSION):
         raise ValueError(f"unsupported OMP version 0x{ver:02x}")
-    if is_fragment(op_byte):
-        raise NotImplementedError(
-            "fragmented OMP packets — landing in Sprint 12 (LoRa hardware)"
-        )
-    op = real_op(op_byte)
+    # docs/05-OMP-PROTOCOL.md §1.2 says "high bit of op marks fragment"
+    # but §3 catalogues opcodes up to 0xFF, which conflict at the byte
+    # level. Sprint 4 reads the full byte as the opcode and defers
+    # fragmentation to Sprint 12 (LoRa hw) when the marker placement
+    # is revisited. The codec's is_fragment helper stays available for
+    # callers that explicitly want to test it.
+    op = op_byte
     body = packet[HEADER_LEN:]
     if ver == VERSION:
         body = _brotli_decompress(body, dictionary=dictionary)
