@@ -9,7 +9,8 @@ kiwix/
 
 # v3 additions
 .trash_local/
-data/
+/data/
+!shell/src/data/
 shell/dist/
 shell/public/dist/
 shell/node_modules/

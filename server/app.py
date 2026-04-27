@@ -15,6 +15,7 @@ from legacy_server import app  # noqa: F401  -- v2 routes (side-effect import)
 from server import ws as _ws
 from server.omp import server as _omp_server
 from server.modules import comms as _comms
+from server.modules import medical as _medical
 from server.modules import knowledge as _knowledge
 from server.modules import power as _power
 
@@ -23,5 +24,6 @@ _omp_server.register(app)
 _power.register(app)
 _knowledge.register(app)
 _comms.register(app)
+_medical.register(app)
 
 __all__ = ["app"]
