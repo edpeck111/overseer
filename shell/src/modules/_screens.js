@@ -8,6 +8,7 @@ import { mountPower } from "./power.js";
 import { mountKnowledge } from "./knowledge.js";
 import { mountComms }     from "./comms.js";
 import { mountMedical }   from "./medical.js";
+import { mountNavigation } from "./navigation.js";
 
 /** @type {Record<string, (root: HTMLElement, store: any, ctx: any) => (() => void) | undefined>} */
 export const SCREENS = {
@@ -16,5 +17,6 @@ export const SCREENS = {
   KNOWLEDGE: mountKnowledge,
   COMMS:     mountComms,
   MEDICAL:   mountMedical,
+  NAVIGATION: mountNavigation,
   // KNOWLEDGE, COMMS, ... land in their respective sprints
 };

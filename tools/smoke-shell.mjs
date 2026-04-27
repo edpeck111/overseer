@@ -92,6 +92,20 @@ window.fetch = async (url) => {
   });
   if (u.includes("/api/m/run/start")) return fakeResp({ run_id: 99 });
   if (u.match(/\/api\/m\/run\/\d+\/(step|end)/)) return fakeResp({ ok: true });
+  if (u.endsWith("/api/n/waypoints")) return fakeResp([
+    { id: 1, name: "Cache-7",  cat: "cache", lat: 53.39, lon: -1.46, elev: null, notes: "under the cairn", verified: true },
+    { id: 2, name: "RV-North", cat: "rdv",   lat: 53.42, lon: -1.45, elev: null, notes: "", verified: false },
+  ]);
+  if (u.includes("/api/n/waypoint")) return fakeResp({ id: 3 });
+  if (u.includes("/api/n/nearest")) return fakeResp([
+    { id: 1, name: "Cache-7",  cat: "cache", bearing_deg: 12.3, dist_m: 1450 },
+    { id: 2, name: "RV-North", cat: "rdv",   bearing_deg: 88.7, dist_m: 4500 },
+  ]);
+  if (u.includes("/api/n/terrain")) return fakeResp({
+    width: 16, height: 12,
+    bitmap: Array.from({length: 12}, (_, y) => Array.from({length: 16}, (_, x) => (x + y) % 3 === 0 ? 1 : 0)),
+  });
+  if (u.endsWith("/api/n/overlays")) return fakeResp([]);
   if (u.endsWith("/api/m/runs")) return fakeResp([
     { id: 99, category: "bleeding", started: 1714086840, ended: 1714086900, outcome: "ARTERIAL — LIFE THREAT", step_count: 1 },
   ]);
@@ -397,5 +411,51 @@ await new Promise((r) => setTimeout(r, 60));
 const runRows = med.querySelectorAll(".med-run-row");
 if (runRows.length === 0) fail("MEDICAL history empty (mock /api/m/runs not consumed)");
 pass(`MEDICAL history shows ${runRows.length} run(s)`);
+
+
+// ---- Sprint 8 NAVIGATION assertions ------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "N" }));
+await new Promise((r) => setTimeout(r, 100));
+const nav = document.querySelector(".screen-nav");
+if (!nav) fail("NAVIGATION screen not mounted on N");
+pass("press N then NAVIGATION screen mounts");
+
+const navTabs = nav.querySelectorAll(".kb-tab");
+if (navTabs.length !== 4) fail(`NAVIGATION expected 4 tabs (W/C/M/O), got ${navTabs.length}`);
+pass(`NAVIGATION has ${navTabs.length} sub-screen tabs`);
+
+// Waypoints sub-screen — at least 2 from the mock
+const wpRows = nav.querySelectorAll(".nav-wp-row");
+if (wpRows.length < 1) fail(`NAVIGATION waypoints expected ≥1, got ${wpRows.length}`);
+pass(`NAVIGATION waypoints shows ${wpRows.length} rows from mocked /api/n/waypoints`);
+
+// Compass sub-screen — bearing rows from /api/n/nearest
+navTabs[1].click();
+await new Promise((r) => setTimeout(r, 60));
+const compassRows = nav.querySelectorAll(".nav-compass-row");
+if (compassRows.length < 1) fail("NAVIGATION compass empty (mock /api/n/nearest not consumed)");
+pass(`NAVIGATION compass shows ${compassRows.length} bearing(s)`);
+
+// Map sub-screen — text-map rendered through the JS sextant rasterizer
+navTabs[2].click();
+await new Promise((r) => setTimeout(r, 80));
+const mapPre = nav.querySelector(".nav-map");
+if (!mapPre) fail("NAVIGATION text-map not rendered");
+const mapText = mapPre.textContent;
+// Verify the output contains sextant glyphs (U+1FB00..1FB3B range or
+// the four substitutions). Cheap test: presence of a non-ASCII char.
+if (!/[\u2580\u2588\u2590\u258C\u{1FB00}-\u{1FB3B}]/u.test(mapText)) {
+  fail(`NAVIGATION text-map has no sextant glyphs: "${mapText.slice(0, 40)}"`);
+}
+pass(`NAVIGATION text-map renders sextant glyphs (${mapText.split("\n").length} rows)`);
+
+// Overlays sub-screen
+navTabs[3].click();
+await new Promise((r) => setTimeout(r, 60));
+const overlayBody = nav.querySelector(".kb-empty, .nav-ovs");
+if (!overlayBody) fail("NAVIGATION overlays sub-screen empty");
+pass("NAVIGATION overlays sub-screen mounts");
 
 console.log("\nALL CHECKS PASSED");
