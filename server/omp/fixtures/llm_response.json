@@ -1,9 +1,0 @@
-{
-  "stream_id": 42,
-  "tokens": "Rainwater is generally safe but should be filtered through cloth and either boiled (1 minute rolling), treated with unscented bleach (8 drops/gallon, 30 min wait), or run through a 0.2-micron filter. Avoid first-flush runoff. Field medicine only. Seek trained personnel if available. Stay sharp.",
-  "citations": [
-    {"archive": "wikem_en_all", "article": "Water purification", "paragraph": 3, "score": 0.91},
-    {"archive": "mdwiki_en_all_maxi", "article": "Waterborne diseases", "paragraph": 1, "score": 0.84}
-  ],
-  "done": true
-}

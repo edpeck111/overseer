@@ -1,0 +1,131 @@
+/* LOG module — journal, entries, summary, export. */
+
+.log-day-header {
+  padding: 6px 8px; border-bottom: 1px solid var(--rule);
+  display: flex; align-items: baseline; gap: 0; flex-wrap: wrap;
+}
+.log-day-num   { color: var(--amber); font-weight: 700; letter-spacing: 0.12em; }
+.log-day-sep   { color: var(--fg-dim); }
+.log-day-date  { color: var(--fg); letter-spacing: 0.06em; }
+.log-entry-count { color: var(--fg-dim); font-size: 0.88em; margin-left: 6px; }
+
+.log-entry-list { padding: 4px 0; display: flex; flex-direction: column; }
+
+.log-entry-row {
+  display: grid;
+  grid-template-columns: 5ch 11ch 1fr;
+  gap: 6px; padding: 3px 8px;
+  border-bottom: 1px solid var(--rule-subtle, rgba(255,255,255,0.04));
+}
+.log-entry-row.log-auto { opacity: 0.7; }
+.log-entry-time { color: var(--fg-dim); font-size: 0.9em; font-family: var(--font-mono); }
+.log-entry-kind {
+  font-size: 0.82em; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--cyan);
+}
+.log-entry-body { color: var(--fg); }
+
+/* Kind colour variants */
+.log-kind-incident  { color: var(--red-bright,  #f87171); }
+.log-kind-decision  { color: var(--amber); }
+.log-kind-triage    { color: var(--red-bright,  #f87171); }
+.log-kind-patrol    { color: var(--cyan-bright,  #67e8f9); }
+.log-kind-system    { color: var(--fg-dim); }
+
+.log-date-divider {
+  padding: 4px 8px; color: var(--fg-dim);
+  font-size: 0.82em; letter-spacing: 0.18em;
+  border-top: 1px dashed var(--rule); margin-top: 4px;
+}
+
+/* Quick-entry bar */
+.log-quick {
+  display: flex; gap: 6px; padding: 6px 8px;
+  border-top: 1px solid var(--rule); margin-top: auto;
+  flex-wrap: wrap;
+}
+.log-kind-sel {
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 6px;
+  font-family: var(--font-mono); font-size: 0.88em;
+  min-width: 11ch;
+}
+.log-input {
+  flex: 1; min-width: 14ch;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 6px;
+  font-family: var(--font-mono);
+}
+.log-input:focus { outline: none; border-color: var(--fg-dim); }
+.log-submit-btn {
+  background: var(--bg-panel); color: var(--amber);
+  border: 1px solid var(--amber); padding: 3px 10px;
+  cursor: pointer; letter-spacing: 0.14em; font-size: 0.88em;
+}
+.log-submit-btn:hover { background: var(--amber); color: var(--bg); }
+
+/* Entries filters */
+.log-filters {
+  display: flex; gap: 8px; padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.log-filter-kind {
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 6px;
+  font-family: var(--font-mono); font-size: 0.88em;
+}
+.log-search {
+  flex: 1;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 6px;
+  font-family: var(--font-mono);
+}
+.log-search:focus { outline: none; border-color: var(--fg-dim); }
+
+/* Section headers */
+.log-section-header {
+  padding: 6px 8px; color: var(--fg-dim);
+  letter-spacing: 0.22em; font-size: 0.85em;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Summary */
+.log-summary-card {
+  margin: 8px; padding: 10px 12px;
+  border: 1px solid var(--rule); background: var(--bg-panel);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.log-summary-date  { color: var(--amber); letter-spacing: 0.12em; font-size: 0.88em; }
+.log-summary-text  { color: var(--fg); white-space: pre-wrap; margin: 0; font-family: var(--font-mono); }
+.log-summary-approved { color: var(--cyan); font-size: 0.88em; letter-spacing: 0.1em; }
+.log-approve-btn {
+  align-self: flex-start;
+  background: var(--bg-panel); color: var(--cyan);
+  border: 1px solid var(--cyan); padding: 3px 12px;
+  cursor: pointer; letter-spacing: 0.14em; font-size: 0.88em;
+}
+.log-approve-btn:hover { background: var(--cyan); color: var(--bg); }
+
+/* Export */
+.log-export-form {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 8px; align-items: center;
+}
+.log-export-label  { color: var(--fg-dim); font-size: 0.88em; letter-spacing: 0.14em; }
+.log-export-date {
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 6px;
+  font-family: var(--font-mono);
+}
+.log-export-btn {
+  background: var(--bg-panel); color: var(--amber);
+  border: 1px solid var(--amber); padding: 3px 12px;
+  cursor: pointer; letter-spacing: 0.14em; font-size: 0.88em;
+}
+.log-export-btn:hover { background: var(--amber); color: var(--bg); }
+.log-export-preview {
+  margin: 8px; padding: 10px;
+  border: 1px solid var(--rule); color: var(--fg);
+  white-space: pre-wrap; font-size: 0.88em; overflow-y: auto;
+  max-height: 50vh;
+}

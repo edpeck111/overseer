@@ -113,6 +113,25 @@ window.fetch = async (url) => {
     { user_id: "BRAVO-2", callsign: "BRAVO-2", transport: "wifi", rssi: -42, dist_m: null, last_seen: Date.now()/1000 - 30 },
     { user_id: "CHARLIE-7", callsign: "CHARLIE-7", transport: "lora", rssi: -101, dist_m: 9000, last_seen: Date.now()/1000 - 600 },
   ]);
+  if (u.endsWith("/api/l/today")) return fakeResp({
+    date: new Date().toISOString().slice(0,10), day_number: 417,
+    entries: [
+      { id: 1, kind: "patrol",      body: "N perimeter. Nominal.",          time: "09:14", tags: ["patrol","security"], source: "user", at: 1714086840 },
+      { id: 2, kind: "observation", body: "Fresh tracks north of Cache-7.", time: "11:02", tags: ["observation"],         source: "user", at: 1714090440 },
+      { id: 3, kind: "incident",    body: "Solar inverter fault, cleared.", time: "16:18", tags: ["incident","power"],   source: "auto", at: 1714112280 },
+    ],
+  });
+  if (u.includes("/api/l/entries")) return fakeResp([
+    { id: 1, kind: "patrol",      body: "N perimeter. Nominal.", time: "09:14", date: "2025-04-26", tags: ["patrol"], source: "user", at: 1714086840 },
+    { id: 2, kind: "observation", body: "Fresh tracks.",          time: "11:02", date: "2025-04-26", tags: ["observation"], source: "user", at: 1714090440 },
+  ]);
+  if (u.includes("/api/l/summary/")) return fakeResp({
+    date: new Date().toISOString().slice(0,10),
+    text: "D+417 — 3 entries logged.\nPatrol: 1 circuit(s) completed.\nIncidents: 1 — review recommended.",
+    approved_at: null,
+  });
+  if (u.includes("/api/l/entry") && !u.includes("entries")) return fakeResp({ id: 99, kind: "note", body: "smoke test entry", tags: ["note"], time: "12:00", date: new Date().toISOString().slice(0,10), at: Date.now()/1000, source: "user" });
+  if (u.includes("/api/l/kinds")) return fakeResp(["observation","decision","patrol","ration","incident","triage","comms","system","note"]);
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -457,5 +476,71 @@ await new Promise((r) => setTimeout(r, 60));
 const overlayBody = nav.querySelector(".kb-empty, .nav-ovs");
 if (!overlayBody) fail("NAVIGATION overlays sub-screen empty");
 pass("NAVIGATION overlays sub-screen mounts");
+
+
+
+// ---- Sprint 9 LOG assertions -------------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "L" }));
+await new Promise((r) => setTimeout(r, 100));
+const lg = document.querySelector(".screen-log");
+if (!lg) fail("LOG screen not mounted on L");
+pass("press L then LOG screen mounts");
+
+const lgTabs = lg.querySelectorAll(".kb-tab");
+if (lgTabs.length !== 4) fail(`LOG expected 4 tabs (T/E/S/X), got ${lgTabs.length}`);
+pass(`LOG has ${lgTabs.length} sub-screen tabs`);
+
+// TODAY — entries render from mock /api/l/today
+await new Promise((r) => setTimeout(r, 60));
+const lgRows = lg.querySelectorAll(".log-entry-row");
+if (lgRows.length < 3) fail(`LOG today expected ≥3 entry rows, got ${lgRows.length}`);
+pass(`LOG today shows ${lgRows.length} entries from mocked /api/l/today`);
+
+// Day header shows D+ number
+const lgHeader = lg.querySelector(".log-day-num");
+if (!lgHeader || !lgHeader.textContent.includes("D+")) fail("LOG day header missing D+ number");
+pass(`LOG day header: "${lgHeader.textContent.trim()}"`);
+
+// Quick-entry input present
+const lgInput = lg.querySelector(".log-input");
+if (!lgInput) fail("LOG quick-entry input not present");
+pass("LOG quick-entry input present");
+
+// ENTRIES sub-screen
+lgTabs[1].click();
+await new Promise((r) => setTimeout(r, 80));
+const lgEntryRows = lg.querySelectorAll(".log-entry-row");
+if (lgEntryRows.length < 1) fail("LOG entries sub-screen empty (mock /api/l/entries not consumed)");
+pass(`LOG entries sub-screen shows ${lgEntryRows.length} rows`);
+
+// Kind filter select present
+const lgKindSel = lg.querySelector(".log-filter-kind");
+if (!lgKindSel) fail("LOG entries kind filter missing");
+pass("LOG entries kind filter select present");
+
+// SUMMARY sub-screen
+lgTabs[2].click();
+await new Promise((r) => setTimeout(r, 80));
+const lgSummary = lg.querySelector(".log-summary-card");
+if (!lgSummary) fail("LOG summary card not rendered");
+pass("LOG summary card renders from mocked /api/l/summary");
+
+const lgSummaryText = lg.querySelector(".log-summary-text");
+if (!lgSummaryText || !lgSummaryText.textContent.includes("D+")) fail("LOG summary text missing D+ line");
+pass(`LOG summary text: "${lgSummaryText.textContent.slice(0,40).trim()}…"`);
+
+// Approve button present (not yet approved)
+const lgApproveBtn = lg.querySelector(".log-approve-btn");
+if (!lgApproveBtn) fail("LOG approve button not present");
+pass("LOG approve button present on unapproved summary");
+
+// EXPORT sub-screen
+lgTabs[3].click();
+await new Promise((r) => setTimeout(r, 40));
+const lgExportBtn = lg.querySelector(".log-export-btn");
+if (!lgExportBtn) fail("LOG export button not present");
+pass("LOG export sub-screen mounts with date range + export button");
 
 console.log("\nALL CHECKS PASSED");

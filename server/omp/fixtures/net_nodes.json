@@ -1,6 +1,0 @@
-[
-  {"user_id": "BRAVO-2",   "callsign": "BRAVO-2",   "transport": "wifi", "rssi": -42,  "dist_m": null,    "last_seen": 1714086810},
-  {"user_id": "CHARLIE-7", "callsign": "CHARLIE-7", "transport": "lora", "rssi": -101, "dist_m": 9000,    "last_seen": 1714086240},
-  {"user_id": "DELTA-4",   "callsign": "DELTA-4",   "transport": "lora", "rssi": -118, "dist_m": 14000,   "last_seen": 1714083240},
-  {"user_id": "ECHO-3",    "callsign": "ECHO-3",    "transport": "lora", "rssi": -125, "dist_m": 22000,   "last_seen": 1714065240}
-]
