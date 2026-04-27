@@ -65,6 +65,22 @@ window.fetch = async (url) => {
     paragraphs: ["Filter through cloth.", "Boil one minute.", "Bleach: 8 drops/gallon."],
   });
   if (u.includes("/api/k/branches")) return fakeResp({ roots: [] });
+  if (u.includes("/api/c/contacts/register")) return fakeResp({ callsign: "ALPHA-1", fp: "abc123" });
+  if (u.match(/\/api\/c\/inbox\//)) return fakeResp([
+    { id: 1, from: "BRAVO-2", subj: "Re: rendezvous", body: "copy that", when: 1714086840, state: "delivered", verified: true, hops: 1 },
+  ]);
+  if (u.match(/\/api\/c\/sent\//)) return fakeResp([]);
+  if (u.endsWith("/api/c/boards")) return fakeResp([
+    { name: "/general", post_count: 14, last_post_at: 1714086840 },
+    { name: "/intel",   post_count: 8,  last_post_at: 1714083200 },
+    { name: "/trade",   post_count: 5,  last_post_at: null },
+    { name: "/swap",    post_count: 2,  last_post_at: null },
+    { name: "/sos",     post_count: 0,  last_post_at: null },
+  ]);
+  if (u.endsWith("/api/c/net")) return fakeResp([
+    { user_id: "BRAVO-2", callsign: "BRAVO-2", transport: "wifi", rssi: -42, dist_m: null, last_seen: Date.now()/1000 - 30 },
+    { user_id: "CHARLIE-7", callsign: "CHARLIE-7", transport: "lora", rssi: -101, dist_m: 9000, last_seen: Date.now()/1000 - 600 },
+  ]);
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -278,5 +294,46 @@ await new Promise((r) => setTimeout(r, 30));
 const tree = kb.querySelector(".kb-tree");
 if (!tree) fail("branches tree node not mounted");
 pass("branches sub-screen mounts (tree present)");
+
+
+// ---- Sprint 6 COMMS assertions ----------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));   // back to HOME first
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "C" }));
+await new Promise((r) => setTimeout(r, 100));     // bootstrap fetches need to resolve
+const cm = document.querySelector(".screen-comms");
+if (!cm) fail("COMMS screen not mounted on C");
+pass("press C then COMMS screen mounts");
+
+const cmTabs = cm.querySelectorAll(".kb-tab");
+if (cmTabs.length !== 3) fail(`COMMS expected 3 tabs (M/B/N), got ${cmTabs.length}`);
+pass(`COMMS has ${cmTabs.length} sub-screen tabs`);
+
+// Mail sub-screen has the 3-pane grid + 5 folders
+const cmGrid = cm.querySelector(".comms-grid");
+if (!cmGrid) fail("COMMS mail grid not present");
+const folders = cm.querySelectorAll(".comms-folders .comms-folder");
+if (folders.length !== 5) fail(`COMMS expected 5 folders (INBOX/SENT/DRAFTS/ARCHIVE/OUTBOX), got ${folders.length}`);
+pass(`COMMS mail has ${folders.length} folders + 3 panes`);
+
+// Inbox row visible (the "Re: rendezvous" message from the fetch mock)
+await new Promise((r) => setTimeout(r, 30));
+const cmRows = cm.querySelectorAll(".comms-row");
+if (cmRows.length === 0) fail("COMMS inbox empty (mock /api/c/inbox not consumed)");
+pass(`COMMS inbox shows ${cmRows.length} message(s) from mocked /api/c/inbox`);
+
+// Boards sub-screen
+cmTabs[1].click();
+await new Promise((r) => setTimeout(r, 60));
+const boardRows = cm.querySelectorAll(".comms-folder");
+if (boardRows.length !== 5) fail(`COMMS boards expected 5, got ${boardRows.length}`);
+pass(`COMMS boards lists ${boardRows.length} boards (general/intel/trade/swap/sos)`);
+
+// Net sub-screen
+cmTabs[2].click();
+await new Promise((r) => setTimeout(r, 60));
+const netRows = cm.querySelectorAll(".comms-net-list .net-row");
+if (netRows.length < 1) fail("COMMS net pane has no rows");
+pass(`COMMS net pane shows ${netRows.length} mesh node(s)`);
 
 console.log("\nALL CHECKS PASSED");
