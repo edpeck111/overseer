@@ -1,0 +1,86 @@
+/* MEDICAL module — wizard, history, dose, drugs, photo. */
+
+.medical .kb-tabs { /* shares .kb-tab styling with knowledge.css */ }
+
+.med-cat-grid {
+  display: grid; gap: 8px; padding: 6px;
+  grid-template-columns: 1fr 1fr;
+}
+.terminal[data-mode="tablet"]  .med-cat-grid,
+.terminal[data-mode="desktop"] .med-cat-grid { grid-template-columns: repeat(4, 1fr); }
+.med-cat-card {
+  border: 1px solid var(--rule); background: var(--bg-panel);
+  padding: 12px; cursor: pointer; text-align: center;
+}
+.med-cat-card:hover { background: var(--bg-panel-hi); border-color: var(--rule-bright); }
+.med-cat-icon { font-size: 1.6em; color: var(--amber); }
+.med-cat-name { color: var(--fg-bright); letter-spacing: 0.16em; margin-top: 4px; }
+
+.med-q { font-size: 1.1em; color: var(--fg-bright); padding: 8px 6px; letter-spacing: 0.04em; }
+.med-opts { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.med-opt {
+  display: flex; gap: 10px; padding: 6px 10px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--bg-panel);
+}
+.med-opt:hover { background: var(--bg-panel-hi); border-color: var(--fg-dim); }
+.med-opt-key   { color: var(--amber); min-width: 4ch; font-weight: 700; }
+.med-opt-label { color: var(--fg); }
+.med-controls  { color: var(--fg-dim); font-size: 0.9em; padding: 6px; }
+
+.med-action-card {
+  border: 1px solid var(--rule); background: var(--bg-panel); padding: 12px;
+  margin: 8px 0; display: flex; flex-direction: column; gap: 6px;
+}
+.med-action-card.danger { border-color: var(--red); }
+.med-action-title { color: var(--amber); letter-spacing: 0.15em; font-size: 1.05em; }
+.med-action-card.danger .med-action-title { color: var(--red-bright); }
+.med-action-title.bad { color: var(--red-bright); }
+.med-action-h    { color: var(--fg-dim); letter-spacing: 0.18em; font-size: 0.9em; margin-top: 6px; padding-bottom: 2px; border-bottom: 1px dashed var(--rule); }
+.med-action-h.ok  { color: var(--cyan-bright); }
+.med-action-h.bad { color: var(--red-bright); }
+.med-steps { padding-left: 24px; line-height: 1.55; color: var(--fg); }
+.med-steps li { margin: 2px 0; }
+.med-list  { padding-left: 20px; line-height: 1.5; color: var(--fg); font-size: 0.95em; }
+.med-list li { margin: 2px 0; }
+
+.med-runs-list .med-run-row {
+  display: grid; grid-template-columns: 6ch 12ch 1fr 8ch; gap: 8px;
+  padding: 4px 6px; cursor: pointer; border-bottom: 1px dashed var(--rule);
+  font-size: 0.95em;
+}
+.med-run-row:hover { background: var(--bg-panel-hi); }
+.med-run-row.sel   { background: var(--rule-dim); }
+.med-run-row .id   { color: var(--fg-dim); }
+.med-run-row .cat  { color: var(--fg-bright); letter-spacing: 0.1em; }
+.med-run-row .out  { color: var(--amber); }
+.med-run-row .n    { color: var(--fg-dim); text-align: right; }
+.med-run-detail .med-step { padding: 3px 6px; display: flex; gap: 8px; }
+.med-run-detail .med-step .q { color: var(--fg-dim); flex: 1; }
+.med-run-detail .med-step .ans { color: var(--fg-bright); }
+.med-run-detail .med-outcome { color: var(--amber); font-weight: 700; padding: 6px 0; }
+
+.med-form { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; max-width: 50ch; }
+.med-form-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+.med-form-row .k { color: var(--fg-dim); min-width: 12ch; letter-spacing: 0.06em; }
+.med-form-row .v { color: var(--fg-bright); }
+.med-form-row .field {
+  flex: 1; background: transparent; border: 0; outline: 0;
+  border-bottom: 1px solid var(--rule); padding: 2px 4px;
+  font: inherit; color: var(--fg-bright);
+}
+.med-btn {
+  background: var(--rule-dim); border: 1px solid var(--fg-dim); color: var(--fg-bright);
+  padding: 4px 12px; cursor: pointer; font: inherit; letter-spacing: 0.08em;
+  margin: 6px 4px 4px 0;
+}
+.med-btn:hover { background: var(--bg-panel-hi); border-color: var(--fg-bright); }
+
+.med-drug-list .med-drug-row {
+  display: grid; grid-template-columns: 14ch 1fr; gap: 8px;
+  padding: 3px 6px; cursor: pointer; border-bottom: 1px dashed var(--rule);
+  font-size: 0.95em;
+}
+.med-drug-row:hover { background: var(--bg-panel-hi); }
+.med-drug-row.sel   { background: var(--rule-dim); }
+.med-drug-row .name  { color: var(--fg-bright); }
+.med-drug-row .class { color: var(--fg-dim); font-size: 0.9em; }

@@ -77,6 +77,24 @@ window.fetch = async (url) => {
     { name: "/swap",    post_count: 2,  last_post_at: null },
     { name: "/sos",     post_count: 0,  last_post_at: null },
   ]);
+  if (u.endsWith("/api/m/categories")) return fakeResp([
+    { id: "bleeding", name: "BLEEDING", icon: "+" },
+    { id: "burns",    name: "BURNS",    icon: "▲" },
+    { id: "choking",  name: "CHOKING",  icon: "!" },
+  ]);
+  if (u.includes("/api/m/tree/bleeding")) return fakeResp({
+    name: "BLEEDING", start: "severity",
+    nodes: {
+      severity: { q: "How severe?", opts: [{ label: "Spurting", next: "arterial" }, { label: "Steady", next: "venous" }] },
+      arterial: { action: { title: "ARTERIAL — LIFE THREAT", cls: "danger", steps: ["Press hard"], doList: ["Tourniquet"], dontList: ["Remove dressing"] } },
+      venous:   { action: { title: "VENOUS — SERIOUS", steps: ["Direct pressure"], doList: ["Elevate"], dontList: ["Peek often"] } },
+    },
+  });
+  if (u.includes("/api/m/run/start")) return fakeResp({ run_id: 99 });
+  if (u.match(/\/api\/m\/run\/\d+\/(step|end)/)) return fakeResp({ ok: true });
+  if (u.endsWith("/api/m/runs")) return fakeResp([
+    { id: 99, category: "bleeding", started: 1714086840, ended: 1714086900, outcome: "ARTERIAL — LIFE THREAT", step_count: 1 },
+  ]);
   if (u.endsWith("/api/c/net")) return fakeResp([
     { user_id: "BRAVO-2", callsign: "BRAVO-2", transport: "wifi", rssi: -42, dist_m: null, last_seen: Date.now()/1000 - 30 },
     { user_id: "CHARLIE-7", callsign: "CHARLIE-7", transport: "lora", rssi: -101, dist_m: 9000, last_seen: Date.now()/1000 - 600 },
@@ -335,5 +353,49 @@ await new Promise((r) => setTimeout(r, 60));
 const netRows = cm.querySelectorAll(".comms-net-list .net-row");
 if (netRows.length < 1) fail("COMMS net pane has no rows");
 pass(`COMMS net pane shows ${netRows.length} mesh node(s)`);
+
+
+// ---- Sprint 7 MEDICAL assertions ---------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "M" }));
+await new Promise((r) => setTimeout(r, 80));
+const med = document.querySelector(".screen-medical");
+if (!med) fail("MEDICAL screen not mounted on M");
+pass("press M then MEDICAL screen mounts");
+
+const medTabs = med.querySelectorAll(".kb-tab");
+if (medTabs.length !== 5) fail(`MEDICAL expected 5 tabs (T/H/D/R/P), got ${medTabs.length}`);
+pass(`MEDICAL has ${medTabs.length} sub-screen tabs`);
+
+// Triage category picker — at least 3 cards from the mock
+const cards = med.querySelectorAll(".med-cat-card");
+if (cards.length < 3) fail(`MEDICAL category picker expected ≥3 cards, got ${cards.length}`);
+pass(`MEDICAL triage picker shows ${cards.length} categories`);
+
+// Click a category → wizard renders with a question + opts
+cards[0].click();
+await new Promise((r) => setTimeout(r, 60));
+const q = med.querySelector(".med-q");
+if (!q) fail("MEDICAL wizard question not rendered after category click");
+pass(`MEDICAL wizard rendered question: "${q.textContent.slice(0, 30)}..."`);
+
+const opts = med.querySelectorAll(".med-opt");
+if (opts.length < 2) fail(`MEDICAL wizard expected ≥2 options, got ${opts.length}`);
+pass(`MEDICAL wizard offers ${opts.length} options`);
+
+// Pick the first option → expect an action (outcome) card
+opts[0].click();
+await new Promise((r) => setTimeout(r, 60));
+const outcome = med.querySelector(".med-action-card");
+if (!outcome) fail("MEDICAL outcome card not rendered after answer");
+pass(`MEDICAL wizard reached outcome card: "${med.querySelector('.med-action-title').textContent.slice(0,30)}..."`);
+
+// History sub-screen — uses mocked /api/m/runs
+medTabs[1].click();
+await new Promise((r) => setTimeout(r, 60));
+const runRows = med.querySelectorAll(".med-run-row");
+if (runRows.length === 0) fail("MEDICAL history empty (mock /api/m/runs not consumed)");
+pass(`MEDICAL history shows ${runRows.length} run(s)`);
 
 console.log("\nALL CHECKS PASSED");
