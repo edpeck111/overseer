@@ -29,3 +29,25 @@ _medical.register(app)
 _navigation.register(app)
 
 __all__ = ["app"]
+
+
+# --------------------------------------------------------------------- #
+# v3 shell mount — serves shell/public/* at /v3/* so the new UI is
+# actually reachable. Legacy v2 stays at /. Sprint 17 (SYSTEM) will
+# collapse v2 once v3 reaches functional parity per the migration
+# plan in docs/04-IMPLEMENTATION-PLAN.md.
+# --------------------------------------------------------------------- #
+from pathlib import Path as _P
+from flask import send_from_directory as _send
+
+_SHELL = _P(__file__).resolve().parents[1] / "shell" / "public"
+
+@app.route("/v3/")
+@app.route("/v3/<path:path>")
+def _v3_shell(path: str = "index.html"):
+    """Serve the built v3 bundle. The browser hits /v3/ to load
+    index.html, which references dist/main.{js,css} relative to /v3/,
+    so /v3/dist/main.js etc. resolve through the same handler."""
+    if not path:
+        path = "index.html"
+    return _send(_SHELL, path)
