@@ -132,6 +132,45 @@ window.fetch = async (url) => {
   });
   if (u.includes("/api/l/entry") && !u.includes("entries")) return fakeResp({ id: 99, kind: "note", body: "smoke test entry", tags: ["note"], time: "12:00", date: new Date().toISOString().slice(0,10), at: Date.now()/1000, source: "user" });
   if (u.includes("/api/l/kinds")) return fakeResp(["observation","decision","patrol","ration","incident","triage","comms","system","note"]);
+
+  // INVENTORY mocks
+  if (u.endsWith("/api/i/categories")) return fakeResp([
+    { id: "food",   name: "Food",   item_count: 4 },
+    { id: "water",  name: "Water",  item_count: 2 },
+    { id: "medical",name: "Medical",item_count: 1 },
+  ]);
+  if (u.includes("/api/i/items")) return fakeResp([
+    { id: 1, name: "Rice", category: "food", qty: 12, unit: "kg", threshold_qty: 5, exp_days: 720, low: false },
+    { id: 2, name: "Purification Tabs", category: "water", qty: 3, unit: "pack", threshold_qty: 10, exp_days: 18, low: true },
+    { id: 3, name: "QuikClot", category: "medical", qty: 2, unit: "pack", threshold_qty: 2, exp_days: null, low: false },
+  ]);
+  if (u.includes("/api/i/expiring")) return fakeResp([
+    { id: 2, name: "Purification Tabs", qty: 3, unit: "pack", exp_days: 18 },
+    { id: 4, name: "Ibuprofen",         qty: 1, unit: "btl",  exp_days: 25 },
+  ]);
+  if (u.endsWith("/api/i/low")) return fakeResp([
+    { id: 2, name: "Purification Tabs", qty: 3, unit: "pack", threshold_qty: 10 },
+  ]);
+  if (u.includes("/api/i/pack/optimize")) return fakeResp({
+    mission: "48h patrol", total_weight_g: 7200, total_kcal: 4800, medical_coverage: "OK",
+    items: [
+      { id: 1, name: "Rice",             label: "f", weight_g: 2000, kcal: 3200 },
+      { id: 5, name: "Water (2L)",       label: "w", weight_g: 2000, kcal: 0    },
+      { id: 3, name: "QuikClot",         label: "g", weight_g: 200,  kcal: 0    },
+    ],
+  });
+  if (u.includes("/api/i/burn")) return fakeResp([]);
+  if (u.includes("/api/i/scan") || u.includes("/api/i/item") || u.includes("/api/i/event")) return fakeResp({ id: 99 });
+
+  // TIMELINE mocks
+  if (u.includes("/api/t/events")) return fakeResp([
+    { module: "log",       kind: "log.patrol",   body: "N perimeter. Nominal.", at: 1714086840, time: "09:14", date: "2025-04-26", day_number: 417, who: null, ref_id: 1 },
+    { module: "inventory", kind: "inv.event",    body: "Used Rice ×1",          at: 1714090440, time: "11:02", date: "2025-04-26", day_number: 417, who: null, ref_id: 7 },
+    { module: "comms",     kind: "comms.recv",   body: "Msg from BRAVO-2",      at: 1714093440, time: "12:04", date: "2025-04-26", day_number: 417, who: "BRAVO-2", ref_id: 1 },
+  ]);
+  if (u.includes("/api/t/export")) return fakeResp({ text: "# OVERSEER Timeline Export\n\n## D+417 · 2025-04-26\n\n09:14 log.patrol — N perimeter. Nominal.\n" });
+  if (u.includes("/api/t/around")) return fakeResp([]);
+
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -479,6 +518,7 @@ pass("NAVIGATION overlays sub-screen mounts");
 
 
 
+
 // ---- Sprint 9 LOG assertions -------------------------------------
 document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
 await new Promise((r) => setTimeout(r, 30));
@@ -542,5 +582,131 @@ await new Promise((r) => setTimeout(r, 40));
 const lgExportBtn = lg.querySelector(".log-export-btn");
 if (!lgExportBtn) fail("LOG export button not present");
 pass("LOG export sub-screen mounts with date range + export button");
+
+
+// ---- Sprint 10 INVENTORY assertions ---------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "I" }));
+await new Promise((r) => setTimeout(r, 100));
+const inv = document.querySelector(".screen-inv");
+if (!inv) fail("INVENTORY screen not mounted on I");
+pass("press I then INVENTORY screen mounts");
+
+const invTabs = inv.querySelectorAll(".kb-tab");
+if (invTabs.length !== 4) fail(`INVENTORY expected 4 tabs (B/E/L/P), got ${invTabs.length}`);
+pass(`INVENTORY has ${invTabs.length} sub-screen tabs`);
+
+// BROWSE — Miller columns present + categories loaded from mock
+await new Promise((r) => setTimeout(r, 60));
+const invMiller = inv.querySelector(".inv-miller");
+if (!miller) fail("INVENTORY Miller columns not present");
+pass("INVENTORY BROWSE shows Miller columns");
+
+const catRows = inv.querySelectorAll(".inv-cat-row");
+if (catRows.length < 3) fail(`INVENTORY expected ≥3 category rows, got ${catRows.length}`);
+pass(`INVENTORY BROWSE shows ${catRows.length} categories from mocked /api/i/categories`);
+
+// Click first category -> items column populates
+catRows[0].click();
+await new Promise((r) => setTimeout(r, 80));
+const itemRows = inv.querySelectorAll(".inv-item-row");
+if (itemRows.length < 1) fail(`INVENTORY items column empty after cat click, got ${itemRows.length}`);
+pass(`INVENTORY BROWSE items column shows ${itemRows.length} items`);
+
+// EXPIRING sub-screen
+invTabs[1].click();
+await new Promise((r) => setTimeout(r, 80));
+const expRows = inv.querySelectorAll(".inv-exp-row");
+if (expRows.length < 1) fail(`INVENTORY expiring expected >=1 row, got ${expRows.length}`);
+pass(`INVENTORY EXPIRING shows ${expRows.length} expiring item(s)`);
+
+// LOW sub-screen
+invTabs[2].click();
+await new Promise((r) => setTimeout(r, 80));
+const lowRows = inv.querySelectorAll(".inv-low-row");
+if (lowRows.length < 1) fail(`INVENTORY low expected >=1 row, got ${lowRows.length}`);
+pass(`INVENTORY LOW shows ${lowRows.length} below-threshold item(s)`);
+
+// PACK sub-screen — form present
+invTabs[3].click();
+await new Promise((r) => setTimeout(r, 40));
+const packForm = inv.querySelector(".inv-pack-form");
+if (!packForm) fail("INVENTORY PACK form not present");
+pass("INVENTORY PACK sub-screen mounts with optimizer form");
+
+const packMissionSel = inv.querySelector(".inv-pack-mission-sel");
+if (!packMissionSel) fail("INVENTORY PACK mission select not present");
+pass("INVENTORY PACK mission select present");
+
+const packBtn = inv.querySelector(".inv-pack-btn");
+if (!packBtn) fail("INVENTORY PACK optimize button not present");
+pass("INVENTORY PACK OPTIMIZE button present");
+
+// Click OPTIMIZE -> results populate from mock
+packBtn.click();
+await new Promise((r) => setTimeout(r, 80));
+const packRows = inv.querySelectorAll(".inv-pack-row");
+if (packRows.length < 1) fail(`INVENTORY PACK results expected >=1 row, got ${packRows.length}`);
+pass(`INVENTORY PACK results show ${packRows.length} item(s) from mocked /api/i/pack/optimize`);
+
+
+// ---- Sprint 11 TIMELINE assertions -----------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "T" }));
+await new Promise((r) => setTimeout(r, 100));
+const tl = document.querySelector(".screen-tl");
+if (!tl) fail("TIMELINE screen not mounted on T");
+pass("press T then TIMELINE screen mounts");
+
+const tlTabs = tl.querySelectorAll(".kb-tab");
+if (tlTabs.length !== 3) fail(`TIMELINE expected 3 tabs (F/S/X), got ${tlTabs.length}`);
+pass(`TIMELINE has ${tlTabs.length} sub-screen tabs`);
+
+// FEED — range bar + event stream from mock
+await new Promise((r) => setTimeout(r, 80));
+const rangeBar = tl.querySelector(".tl-range-bar");
+if (!rangeBar) fail("TIMELINE range bar not present");
+pass("TIMELINE FEED shows range selector bar");
+
+const rangeBtns = tl.querySelectorAll(".tl-range-btn");
+if (rangeBtns.length !== 5) fail(`TIMELINE expected 5 range buttons (24h/72h/7d/30d/all), got ${rangeBtns.length}`);
+pass(`TIMELINE range bar has ${rangeBtns.length} range buttons`);
+
+const tlStream = tl.querySelector(".tl-stream");
+if (!tlStream) fail("TIMELINE event stream not rendered");
+pass("TIMELINE FEED event stream mounted");
+
+const tlRows = tl.querySelectorAll(".tl-event-row");
+if (tlRows.length < 3) fail(`TIMELINE expected >=3 event rows, got ${tlRows.length}`);
+pass(`TIMELINE FEED shows ${tlRows.length} events from mocked /api/t/events`);
+
+// SEARCH sub-screen — filter inputs + button
+tlTabs[1].click();
+await new Promise((r) => setTimeout(r, 40));
+const tlSearchQ = tl.querySelector(".tl-search-q");
+if (!tlSearchQ) fail("TIMELINE SEARCH query input not present");
+pass("TIMELINE SEARCH query input present");
+
+const tlSearchBtn = tl.querySelector(".tl-search-btn");
+if (!tlSearchBtn) fail("TIMELINE SEARCH button not present");
+pass("TIMELINE SEARCH SEARCH button present");
+
+// EXPORT sub-screen — date pickers + export button
+tlTabs[2].click();
+await new Promise((r) => setTimeout(r, 40));
+const tlExportBtn = tl.querySelector(".tl-export-btn");
+if (!tlExportBtn) fail("TIMELINE EXPORT button not present");
+pass("TIMELINE EXPORT sub-screen mounts with date range + EXPORT MD button");
+
+// Click EXPORT -> markdown preview appears
+tlExportBtn.click();
+await new Promise((r) => setTimeout(r, 80));
+const tlPreview = tl.querySelector(".tl-export-preview");
+if (!tlPreview) fail("TIMELINE EXPORT preview not rendered after click");
+if (!tlPreview.textContent.includes("D+417")) fail("TIMELINE EXPORT preview missing expected D+417 content");
+pass(`TIMELINE EXPORT preview renders: "${tlPreview.textContent.slice(0,40).trim()}..."`);
+
 
 console.log("\nALL CHECKS PASSED");
