@@ -19,6 +19,7 @@ from server.modules import medical as _medical
 from server.modules import navigation as _navigation
 from server.modules import log as _log
 from server.modules import inventory as _inventory
+from server.modules import auspice as _auspice
 from server.modules import timeline as _timeline
 from server.modules import knowledge as _knowledge
 from server.modules import power as _power
@@ -32,6 +33,7 @@ _medical.register(app)
 _navigation.register(app)
 _log.register(app)
 _inventory.register(app)
+_auspice.register(app)
 _timeline.register(app)
 
 __all__ = ["app"]
