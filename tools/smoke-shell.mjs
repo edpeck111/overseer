@@ -257,6 +257,52 @@ window.fetch = async (url, opts) => {
     { id: 1, date: "2025-04-26", preview: "Test entry body.", mood: 4 },
   ]});
 
+
+  // SIGNAL mocks (Sprint 14)
+  if (u.includes("/api/s/weather/passes")) return fakeResp({ passes: [
+    { sat: "NOAA-19", freq_mhz: 137.100, aos: "2025-04-27T06:00:00Z", los: "2025-04-27T06:10:00Z", max_el: 45.0, direction: "N" },
+    { sat: "NOAA-15", freq_mhz: 137.620, aos: "2025-04-27T08:30:00Z", los: "2025-04-27T08:41:00Z", max_el: 32.5, direction: "S" },
+  ]});
+  if (u.includes("/api/s/weather/decode")) return fakeResp({ ok: true, note: "synthetic", capture: { id:1, kind:"apt", sat:"NOAA-19", band:null, path:"data/test.png", at: 1714086840 } });
+  if (u.includes("/api/s/air")) return fakeResp({ aircraft: [
+    { icao:"4CA123", callsign:"EI-ABC", lat:51.52, lon:-0.10, alt_ft:35000, speed_kt:450, heading:270, squawk:"7700", seen:1714086810 },
+    { icao:"400F2C", callsign:"G-XYZQ", lat:51.45, lon:-0.25, alt_ft:12000, speed_kt:220, heading: 95, squawk:"1200", seen:1714086825 },
+  ]});
+  if (u.includes("/api/s/aprs")) return fakeResp({ packets: [
+    { callsign:"M0XYZ-9", symbol:"[", lat:51.503, lon:-0.128, comment:"Mobile: speed 0", at:1714086720 },
+  ]});
+  if (u.includes("/api/s/scan")) return fakeResp({ band:"2m", freq_lo:144.0, freq_hi:146.0, unit:"MHz",
+    buckets: Array.from({length:64}, () => -105 + Math.random()*10) });
+  if (u.includes("/api/s/bands")) return fakeResp({ bands: [
+    { band:"2m",  freq_lo:144.0, freq_hi:146.0, unit:"MHz" },
+    { band:"70cm",freq_lo:430.0, freq_hi:440.0, unit:"MHz" },
+    { band:"HF",  freq_lo:14.0,  freq_hi:14.35, unit:"MHz" },
+    { band:"VHF", freq_lo:108.0, freq_hi:136.0, unit:"MHz" },
+    { band:"UHF", freq_lo:400.0, freq_hi:512.0, unit:"MHz" },
+  ]});
+  if (u.includes("/api/s/captures")) return fakeResp({ captures: [] });
+  if (u.includes("/api/s/mesh")) return fakeResp({ nodes: [] });
+
+  // RECREATION mocks (Sprint 15)
+  if (u.includes("/api/r/fortune")) return fakeResp({ quote: "Two is one, one is none." });
+  if (u.includes("/api/r/wiki/random")) return fakeResp({ title: "Knot -- Bowline", summary: "The bowline forms a fixed loop.", zim: "wikipedia" });
+  if (u.includes("/api/r/games")) return fakeResp({ games: [
+    { id:"chess",  name:"Chess",          status:"available",    hotkey:"C" },
+    { id:"zork",   name:"Bunker Adventure",status:"available",   hotkey:"Z" },
+    { id:"dragon", name:"Dragon's Tale",  status:"coming Sprint 16", hotkey:"D" },
+    { id:"fortune",name:"Fortune",        status:"available",    hotkey:"F" },
+    { id:"wiki",   name:"Wiki Roulette",  status:"available",    hotkey:"W" },
+    { id:"reader", name:"Reader",         status:"available",    hotkey:"R" },
+  ]});
+  if (u.includes("/api/r/chess/new")) return fakeResp({ id:1, fen:"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", pgn:[], to_move:"white", result:null, started:1714086840, board:"  a b c d e f g h\n8 r n b q k b n r 8\n7 p p p p p p p p 7\n6 . . . . . . . . 6\n5 . . . . . . . . 5\n4 . . . . . . . . 4\n3 . . . . . . . . 3\n2 P P P P P P P P 2\n1 R N B Q K B N R 1\n  a b c d e f g h" });
+  if (u.includes("/api/r/chess/") && u.includes("/move")) return fakeResp({ id:1, fen:"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", pgn:["e4"], to_move:"black", result:null, started:1714086840, board:"  a b c d e f g h\n8 r n b q k b n r 8", move_recorded:"e4" });
+  if (u.includes("/api/r/zork/start")) {
+    const sid = (await new Response(opts?.body).json()).session || "test-s";
+    return fakeResp({ session: sid, response: "You stand at the reinforced entrance.", done: false });
+  }
+  if (u.includes("/api/r/zork/") && u.includes("/cmd")) return fakeResp({ response: "You head north into the command room.", room: "command_room", inv:[], done: false });
+  if (u.includes("/api/r/reader/progress") && opts?.method === "POST") return fakeResp({ archive:"wikipedia", article:"Bowline", position:0.42, bookmark:null, updated:1714086840 });
+  if (u.includes("/api/r/reader/progress")) return fakeResp({ progress: [] });
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -875,5 +921,85 @@ pass(`AUSPICE ALMANAC shows ${auSabbats.length} sabbat rows`);
 const auLunarGrid = au.querySelector(".au-lunar-grid");
 if (!auLunarGrid) fail("AUSPICE ALMANAC lunar grid not rendered");
 pass("AUSPICE ALMANAC lunar calendar grid renders");
+
+
+// ---- Sprint 14 SIGNAL smoke assertions ----------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "S" }));
+await new Promise((r) => setTimeout(r, 120));
+const sig = document.querySelector(".screen-signal");
+if (!sig) fail("SIGNAL screen not mounted on S");
+pass("press S then SIGNAL screen mounts");
+
+const sigTabs = sig.querySelectorAll(".kb-tab");
+if (sigTabs.length !== 6) fail(`SIGNAL expected 6 tabs, got ${sigTabs.length}`);
+pass(`SIGNAL has ${sigTabs.length} sub-screen tabs`);
+
+// WEATHER sub-screen (default)
+await new Promise((r) => setTimeout(r, 120));
+const sigPasses = sig.querySelectorAll(".sig-pass-row:not(.sig-pass-hdr)");
+if (sigPasses.length < 1) fail(`SIGNAL WEATHER expected >=1 pass rows, got ${sigPasses.length}`);
+pass(`SIGNAL WEATHER shows ${sigPasses.length} pass rows`);
+
+// AIR sub-screen
+sigTabs[1].click();
+await new Promise((r) => setTimeout(r, 80));
+const sigAir = sig.querySelectorAll(".sig-air-row:not(.sig-air-hdr)");
+if (sigAir.length < 1) fail(`SIGNAL AIR expected >=1 track rows, got ${sigAir.length}`);
+pass(`SIGNAL AIR shows ${sigAir.length} aircraft tracks`);
+
+// APRS sub-screen
+sigTabs[2].click();
+await new Promise((r) => setTimeout(r, 80));
+const sigAprs = sig.querySelectorAll(".sig-aprs-row");
+if (sigAprs.length < 1) fail(`SIGNAL APRS expected >=1 packet rows, got ${sigAprs.length}`);
+pass(`SIGNAL APRS shows ${sigAprs.length} APRS packets`);
+
+// BANDS sub-screen
+sigTabs[5].click();
+await new Promise((r) => setTimeout(r, 80));
+const sigBands = sig.querySelectorAll(".sig-band-row:not(.sig-band-hdr)");
+if (sigBands.length < 1) fail(`SIGNAL BANDS expected >=1 band rows, got ${sigBands.length}`);
+pass(`SIGNAL BANDS shows ${sigBands.length} bands`);
+
+// ---- Sprint 15 RECREATION smoke assertions ------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "R" }));
+await new Promise((r) => setTimeout(r, 120));
+const rec = document.querySelector(".screen-recreation");
+if (!rec) fail("RECREATION screen not mounted on R");
+pass("press R then RECREATION screen mounts");
+
+const recTabs = rec.querySelectorAll(".kb-tab");
+if (recTabs.length !== 6) fail(`RECREATION expected 6 tabs, got ${recTabs.length}`);
+pass(`RECREATION has ${recTabs.length} sub-screen tabs`);
+
+// FORTUNE sub-screen (default) - draw a fortune
+const drawBtn = rec.querySelector(".kb-btn");
+if (!drawBtn) fail("RECREATION FORTUNE draw button missing");
+drawBtn.click();
+await new Promise((r) => setTimeout(r, 80));
+const quote = rec.querySelector(".rec-fortune-quote");
+if (!quote) fail("RECREATION FORTUNE quote not rendered after draw");
+pass("RECREATION FORTUNE quote renders after draw");
+
+// WIKI sub-screen
+recTabs[1].click();
+await new Promise((r) => setTimeout(r, 60));
+const spinBtn = rec.querySelector(".kb-btn");
+if (spinBtn) spinBtn.click();
+await new Promise((r) => setTimeout(r, 80));
+const article = rec.querySelector(".rec-article-title");
+if (!article) fail("RECREATION WIKI article not rendered after spin");
+pass("RECREATION WIKI article renders after spin");
+
+// GAMES sub-screen
+recTabs[2].click();
+await new Promise((r) => setTimeout(r, 80));
+const gameRows = rec.querySelectorAll(".rec-game-row");
+if (gameRows.length < 1) fail(`RECREATION GAMES expected >=1 game rows, got ${gameRows.length}`);
+pass(`RECREATION GAMES shows ${gameRows.length} games`);
 
 console.log("\nALL CHECKS PASSED");

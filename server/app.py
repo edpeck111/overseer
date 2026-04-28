@@ -6,8 +6,8 @@ endpoint (server.omp.server) on top of the legacy app.
 Sprint 3: registers the POWER REST blueprint (server.modules.power).
 
 The legacy v2 routes still resolve unchanged. Sprint 6 onwards will
-replace this shim with a proper ``create_app()`` factory once the
-per-domain modules in :mod:`server.modules` start carrying real code.
+replace this shim with a proper create_app() factory once the
+per-domain modules in server.modules start carrying real code.
 """
 
 from legacy_server import app  # noqa: F401  -- v2 routes (side-effect import)
@@ -23,6 +23,8 @@ from server.modules import auspice as _auspice
 from server.modules import timeline as _timeline
 from server.modules import knowledge as _knowledge
 from server.modules import power as _power
+from server.modules import signal_ as _signal
+from server.modules import recreation as _recreation
 
 _ws.register(app)
 _omp_server.register(app)
@@ -35,16 +37,16 @@ _log.register(app)
 _inventory.register(app)
 _auspice.register(app)
 _timeline.register(app)
+_signal.register(app)
+_recreation.register(app)
 
 __all__ = ["app"]
 
 
-# --------------------------------------------------------------------- #
-# v3 shell mount — serves shell/public/* at /v3/* so the new UI is
-# actually reachable. Legacy v2 stays at /. Sprint 17 (SYSTEM) will
-# collapse v2 once v3 reaches functional parity per the migration
-# plan in docs/04-IMPLEMENTATION-PLAN.md.
-# --------------------------------------------------------------------- #
+# ------------------------------------------------------------------ #
+# v3 shell mount -- serves shell/public/* at /v3/*
+# Sprint 17 (SYSTEM) will collapse v2 once v3 reaches parity.
+# ------------------------------------------------------------------ #
 from pathlib import Path as _P
 from flask import send_from_directory as _send
 
@@ -53,9 +55,7 @@ _SHELL = _P(__file__).resolve().parents[1] / "shell" / "public"
 @app.route("/v3/")
 @app.route("/v3/<path:path>")
 def _v3_shell(path: str = "index.html"):
-    """Serve the built v3 bundle. The browser hits /v3/ to load
-    index.html, which references dist/main.{js,css} relative to /v3/,
-    so /v3/dist/main.js etc. resolve through the same handler."""
+    """Serve the built v3 shell bundle."""
     if not path:
         path = "index.html"
     return _send(_SHELL, path)

@@ -1,16 +1,16 @@
 # OVERSEER v3 — status board
 
-**Last updated:** end of Sprints 12 + 13, Cowork session.
+**Last updated:** end of Sprints 14 + 15, Cowork session.
 
 ---
 
 ## TL;DR
 
-  - Branch `v3-redesign` is **~60 commits past `origin/main`**, all local.
-  - Sprints **0–13 done**; Sprint 14 (SIGNAL) is the next gate.
+  - Branch `v3-redesign` is **~60+ commits past `origin/main`**, all local.
+  - Sprints **0–15 done**; Sprint 16 (Dragon's Tale) is the next gate.
   - Push when convenient: `git push -u origin v3-redesign`
-  - All gates passing: **181 Python tests + 95 jsdom smoke**, no failures.
-  - Bundle ~40 KB gzipped combined (budget 2 MB).
+  - All gates passing: **258 Python tests + 117 jsdom smoke**, no failures.
+  - Bundle ~243 KB unminified (~45 KB gzipped estimate).
 
 ---
 
@@ -42,38 +42,91 @@ git push -u origin v3-redesign
 | 11     | TIMELINE                               | done     | ✓ |
 | 12     | AUSPICE part A (astronomy)             | done     | ✓ |
 | 13     | AUSPICE part B (divination + journal)  | done     | ✓ |
-| 14     | SIGNAL                                 | pending  | — |
-| 15     | RECREATION foundation                  | pending  | — |
+| 14     | SIGNAL                                 | done     | ✓ |
+| 15     | RECREATION foundation                  | done     | ✓ |
 | 16     | RECREATION: Dragon's Tale              | pending  | — |
 | 17     | SYSTEM polish + HELP                   | pending  | — |
 | 18+    | Polish, optional modules, hardware     | pending  | — |
 
 ---
 
-## Gate evidence at end of Sprint 13
+## Gate evidence at end of Sprint 15
 
 ```
-$ pytest tests/unit/         → 181 passed (0 failed)
-$ node tools/smoke-shell.mjs → 95 PASS, 0 FAIL
+$ pytest tests/unit/         -> 258 passed (0 failed)
+$ node tools/smoke-shell.mjs -> 117 PASS, 0 FAIL
 
 Bundle: shell/public/dist/main.{js,css}
-  main.js  gz: ~34 KB
-  main.css gz: ~6 KB
-  combined gz: ~40 KB     (budget: 2 MB)
+  main.js  ~243 KB unminified
+  main.css  ~67 KB unminified
 ```
 
 Test breakdown:
-  - 133 carried (Sprints 0-11 baseline)
-  - +25 new  (test_auspice.py Sprint 12: sky/chart/almanac)
-  - +23 new  (test_auspice.py Sprint 13: tarot/oracle/journal/daily)
+  - 178 carried (Sprints 0-13 baseline)
+  - +40 new  (test_signal.py Sprint 14: passes/decode/air/aprs/scan/bands/captures/routes)
+  - +40 new  (test_recreation.py Sprint 15: fortune/wiki/reader/chess/zork/games/routes)
 
 Smoke breakdown:
-  - 80 carried (Sprints 1-11 baseline)
-  - +15 new  (AUSPICE: sky/moon/planets/upcoming/tarot/oracle/iching/daily/almanac)
+  - 95 carried (Sprints 1-13 baseline)
+  - +10 new   (SIGNAL: passes/air/aprs/bands + tab switching)
+  - +12 new   (RECREATION: fortune/wiki/games + tab switching)
 
-Also patched:
-  - server/modules/log.py: auto-source entries bypass KINDS coercion
-    (allows auspice.sabbat, auspice.full_moon etc. to filter correctly)
+Also fixed in this session:
+  - esbuild IIFE `--global-name` flag dropped: `var __overseer = (()=>{})()` was
+    overwriting `window.__overseer` with undefined. Plain `--format=iife` lets
+    the internal `window.__overseer = ctx` assignment stick correctly.
+  - signal.js integer fields wrapped in String() before passing to el()
+  - Tab click listeners added to signal.js + recreation.js (pattern from auspice.js)
+
+---
+
+## Sprint 14 deliverables (SIGNAL)
+
+`server/modules/signal_.py` (266 lines):
+  - Env flags: OVERSEER_SIGNAL_SDR, _LORA, _ADSB, _APRS (all synthetic default)
+  - Synthetic seed: 4 sat passes (NOAA-15/18/19 + ISS), 3 ADS-B tracks,
+    3 APRS packets, 5 spectrum bands (2m/70cm/HF/VHF/UHF), 64-bucket noise floor
+  - weather_passes() / weather_decode() / air_tracks() / aprs_feed()
+  - spectrum_scan() / captures_list() / bands_list() / mesh_nodes()
+  - mesh_nodes() delegates to comms.nodes_list() (shared store)
+  - 8 REST routes under /api/s/*
+
+`shell/src/modules/signal.{js,css}`:
+  - W(weather): sat pass table (SAT/FREQ/AOS/LOS/EL/DIR) + DECODE trigger
+  - A(air): ADS-B track table with squawk 7700 emergency highlight
+  - P(aprs): packet feed sorted newest-first with age display
+  - M(mesh): LoRa mesh node list (delegates to /api/s/mesh)
+  - S(scan): ASCII waterfall bar chart (64 buckets, band selector)
+  - B(bands): band reference table (freq_lo/freq_hi/unit)
+
+Amber sub-theme (.screen-signal):
+  - --accent: #ffb347, --accent-dim: #c07820, --accent-glow
+
+---
+
+## Sprint 15 deliverables (RECREATION)
+
+`server/modules/recreation.py` (340 lines):
+  - 30 prepper/stoic fortune quotes built-in
+  - Zork-lite: 6 rooms (bunker_entrance/command_room/dormitory/store_room/
+    supply_shaft/comms_hub), full command parser (look/go/take/examine/i/quit/help)
+  - Chess: ASCII FEN board renderer, move recording (no engine — synthetic)
+  - Wiki roulette: 8 stub survival/comms articles
+  - Reader progress: 0.0-1.0 position + bookmark, sorted by updated
+  - Game registry: chess/zork/wiki/fortune/reader (available) +
+    dragon/trader (coming Sprint 16)
+  - 9 REST routes under /api/r/*
+
+`shell/src/modules/recreation.{js,css}`:
+  - F(fortune): draw button -> blockquote with prepper quote
+  - W(wiki): spin button -> article title + summary + source
+  - G(games): game registry grid with available/coming-soon states
+  - C(chess): ASCII board, move input, PGN list, new game
+  - Z(zork): scrolling adventure terminal, room/inv tracking
+  - R(reader): progress bars per article with bookmark display
+
+Green sub-theme (.screen-recreation):
+  - --accent: #6dcc6d, --accent-dim: #3a8a3a, --accent-glow
 
 ---
 
@@ -83,58 +136,19 @@ All in `docs/architecture-decisions/`. See Sprint 8 STATUS for full table.
 
 ---
 
-## Sprint 12+13 deliverables (AUSPICE)
-
-`server/modules/auspice.py` (955 lines):
-  - Pure-math astronomy (Jean Meeus "Astronomical Algorithms" 2nd ed.)
-    - _julian_day / _jd_to_dt / _moon_lon_lat (Ch.47) / _sun_lon (Ch.25)
-    - _sun_rise_set (Ch.15) / _planet_positions (10 bodies, mean orbital elements)
-    - _sabbat_dates (8 cross-quarter/solstice/equinox dates per year)
-    - _lunar_calendar_month (new/full/quarter dates)
-  - Divination engines (all in-memory synthetic-first):
-    - Tarot: full 78-card RWS deck, 3 spreads (PPF/Celtic/Single)
-    - I Ching: 64 hexagrams with judgment text
-    - Runes: 24 Elder Futhark with keywords
-  - AES-256-GCM journal: PBKDF2-HMAC-SHA256 (600k iters) PIN derivation
-    recovery key; per-entry encrypt/decrypt; PIN reset
-  - _seed_almanac_events(): pushes sabbats + 30-day moon events into
-    TIMELINE on startup via register_auto_event()
-  - 14 REST routes under /api/u/*
-
-`shell/src/modules/auspice.{js,css}`:
-  - S(sky): moon phase glyph+illumination, sun rise/transit/set,
-    10-body planet grid, upcoming 30-day celestial events
-  - C(chart): lat/lon/birth-dt form → natal chart planet table + ASC
-  - T(tarot): spread selector, query input, DRAW button, card layout
-    with position/name/reversed/keywords
-  - O(oracle): I Ching CAST (hexagram symbol + judgment + changing lines)
-    | Runes DRAW (glyph + name + keywords) | Traditions list
-  - D(daily): date + moon phase + card of the day + rune of the day
-  - J(journal): PIN unlock form → compose textarea + mood → entry list
-    → detail view
-  - A(almanac): year nav (◀/▶), 8-sabbat wheel, monthly lunar phase grid
-
-`shell/src/modules/_registry.js`:
-  - Added AUSPICE (hotkey U, pip ✦, category secondary, sprint 13)
-
-Purple sub-theme (.screen-auspice):
-  - --accent: #b88cff (lavender), --accent-dim: #7c5cbf, --accent-glow
-
----
-
 ## Things parked
 
 - Brotli dict ctypes shim (ADR-0010)
 - JS-side Brotli v0x02 (wait on browser support)
-- Real model swaps — env flags ready (OVERSEER_AUSPICE_EPH=skyfield etc.)
+- Real model swaps — env flags ready (OVERSEER_SIGNAL_SDR=rtlsdr etc.)
 - COMMS forward secrecy — python-doubleratchet (ADR-0012)
 - Cardputer firmware
 - `.git/` cruft + `.trash_local/` cleanup
 
 ---
 
-## Ready for Sprint 14 (SIGNAL)
+## Ready for Sprint 16 (Dragon's Tale)
 
-Spec in `docs/02-MODULE-CATALOG.md` — SIGNAL section.
-SDR receiver UI, weather NOAA decode, frequency scanner.
-Synthetic-first: stub RTL-SDR backend, real swap via OVERSEER_SDR=rtl.
+Placeholder entry already in game registry (id: "dragon", hotkey: D).
+Full text adventure with branching narrative, inventory, combat — see
+`docs/02-MODULE-CATALOG.md` RECREATION section for full spec.

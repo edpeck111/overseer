@@ -1,4 +1,4 @@
-// Screen registry — single source of truth mapping module name → mounter.
+// Screen registry -- single source of truth mapping module name -> mounter.
 // main.js dispatches to this on every store.module change. Modules
 // without an entry fall back to the Sprint-1 placeholder so the user
 // sees a "coming Sprint N" card rather than a dead screen.
@@ -13,6 +13,8 @@ import { mountLog }        from "./log.js";
 import { mountInventory }  from "./inventory.js";
 import { mountTimeline }   from "./timeline.js";
 import { mountAuspice }    from "./auspice.js";
+import { mountSignal }     from "./signal.js";
+import { mountRecreation } from "./recreation.js";
 
 /** @type {Record<string, (root: HTMLElement, store: any, ctx: any) => (() => void) | undefined>} */
 export const SCREENS = {
@@ -26,4 +28,6 @@ export const SCREENS = {
   INVENTORY:  mountInventory,
   TIMELINE:   mountTimeline,
   AUSPICE:    mountAuspice,
+  SIGNAL:     mountSignal,
+  RECREATION: mountRecreation,
 };
