@@ -218,7 +218,7 @@ def entry_new(
     tags: Optional[list] = None,
 ) -> int:
     global _seq
-    if kind not in KINDS:
+    if kind not in KINDS and source != "auto":
         kind = "note"
     if at is None:
         at = time.time()

@@ -12,6 +12,7 @@ import { mountNavigation } from "./navigation.js";
 import { mountLog }        from "./log.js";
 import { mountInventory }  from "./inventory.js";
 import { mountTimeline }   from "./timeline.js";
+import { mountAuspice }    from "./auspice.js";
 
 /** @type {Record<string, (root: HTMLElement, store: any, ctx: any) => (() => void) | undefined>} */
 export const SCREENS = {
@@ -24,4 +25,5 @@ export const SCREENS = {
   LOG:        mountLog,
   INVENTORY:  mountInventory,
   TIMELINE:   mountTimeline,
+  AUSPICE:    mountAuspice,
 };

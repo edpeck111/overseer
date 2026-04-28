@@ -32,7 +32,7 @@ const fakeResp = (data, status = 200) => ({
   text:  async () => JSON.stringify(data),
   arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(data)).buffer,
 });
-window.fetch = async (url) => {
+window.fetch = async (url, opts) => {
   const u = String(url);
   if (u.includes("/api/p/now")) return fakeResp({
     at: 1714086840, batt_pct: 82, draw_w: 4.2, draw_w_peak: 11.6,
@@ -171,6 +171,92 @@ window.fetch = async (url) => {
   if (u.includes("/api/t/export")) return fakeResp({ text: "# OVERSEER Timeline Export\n\n## D+417 · 2025-04-26\n\n09:14 log.patrol — N perimeter. Nominal.\n" });
   if (u.includes("/api/t/around")) return fakeResp([]);
 
+
+  // AUSPICE mocks (Sprint 12+13)
+  if (u.includes("/api/u/sky/upcoming")) return fakeResp({ events: [
+    { date: "2025-05-01", label: "Full Moon", kind: "full_moon", zodiac: "Scorpio", zodiac_sym: "♏" },
+    { date: "2025-05-15", label: "New Moon",  kind: "new_moon",  zodiac: "Taurus",  zodiac_sym: "♉" },
+  ]});
+  if (u.includes("/api/u/sky")) return fakeResp({
+    moon: { phase_name: "waxing gibbous", glyph: "🌔", illumination: 0.72, zodiac: "Scorpio" },
+    sun:  { rise: "05:32", transit: "12:44", set: "19:56", zodiac: "Taurus" },
+    planets: [
+      { name: "Mercury", lon: 42.3, zodiac: "Taurus",  zodiac_sym: "♉" },
+      { name: "Venus",   lon: 98.7, zodiac: "Gemini",  zodiac_sym: "♊" },
+      { name: "Mars",    lon: 210.1,zodiac: "Scorpio", zodiac_sym: "♏" },
+      { name: "Jupiter", lon: 52.5, zodiac: "Taurus",  zodiac_sym: "♉" },
+    ],
+  });
+  if (u.includes("/api/u/chart")) return fakeResp({
+    planets: [{ name: "Sun", lon: 98.7, zodiac: "Gemini" }, { name: "Moon", lon: 210.1, zodiac: "Scorpio" }],
+    asc: "Virgo",
+  });
+  if (u.includes("/api/u/almanac")) return fakeResp({
+    year: 2025,
+    sabbats: [
+      { name: "Imbolc",   date: "2025-02-01", solar_lon: 315.0 },
+      { name: "Ostara",   date: "2025-03-20", solar_lon: 0.0   },
+      { name: "Beltane",  date: "2025-05-01", solar_lon: 45.0  },
+      { name: "Litha",    date: "2025-06-20", solar_lon: 90.0  },
+      { name: "Lughnasadh", date: "2025-08-01", solar_lon: 135.0 },
+      { name: "Mabon",    date: "2025-09-22", solar_lon: 180.0 },
+      { name: "Samhain",  date: "2025-10-31", solar_lon: 225.0 },
+      { name: "Yule",     date: "2025-12-21", solar_lon: 270.0 },
+    ],
+    lunar_calendar: [
+      { month: 1, month_name: "January", phases: [
+        { phase: "new moon",    date: "2025-01-29", glyph: "🌑" },
+        { phase: "full moon",   date: "2025-01-13", glyph: "🌕" },
+      ]},
+      { month: 2, month_name: "February", phases: [
+        { phase: "new moon",    date: "2025-02-28", glyph: "🌑" },
+        { phase: "full moon",   date: "2025-02-12", glyph: "🌕" },
+      ]},
+    ],
+  });
+  if (u.includes("/api/u/spreads")) return fakeResp({ spreads: [
+    { id: "ppf",       name: "Past / Present / Future", card_count: 3 },
+    { id: "celtic",    name: "Celtic Cross",             card_count: 10 },
+    { id: "single",    name: "Single Card",              card_count: 1 },
+  ]});
+  if (u.includes("/api/u/decks")) return fakeResp({ decks: [{ id: "rws", name: "Rider-Waite-Smith", card_count: 78 }] });
+  if (u.includes("/api/u/readings") && opts?.method === "POST") return fakeResp({
+    id: 1, spread: "ppf", query: "What lies ahead?",
+    cards: [
+      { position: "Past",    name: "The High Priestess", reversed: false, keywords: ["intuition","mystery","wisdom"] },
+      { position: "Present", name: "The Tower",          reversed: true,  keywords: ["disruption","revelation","change"] },
+      { position: "Future",  name: "The Star",           reversed: false, keywords: ["hope","renewal","inspiration"] },
+    ],
+  });
+  if (u.includes("/api/u/readings")) return fakeResp({ readings: [] });
+  if (u.includes("/api/u/oracle/iching")) return fakeResp({
+    hexagram: { number: 1, name: "The Creative", symbol: "䷀", judgment: "The Creative works sublime success." },
+    changing_lines: [1, 4],
+  });
+  if (u.includes("/api/u/oracle/runes")) return fakeResp({ runes: [
+    { name: "Fehu",  glyph: "ᚠ", keywords: ["wealth","abundance","luck"]    },
+    { name: "Uruz",  glyph: "ᚢ", keywords: ["strength","vitality","health"] },
+    { name: "Thurisaz", glyph: "ᚦ", keywords: ["protection","force","chaos"] },
+  ]});
+  if (u.includes("/api/u/oracle/traditions")) return fakeResp({ traditions: [
+    { name: "Rider-Waite-Smith Tarot", card_count: 78 },
+    { name: "Elder Futhark Runes",     card_count: 24 },
+    { name: "I Ching",                 card_count: 64 },
+  ]});
+  if (u.includes("/api/u/daily")) return fakeResp({
+    date: "2025-04-26",
+    moon: { phase_name: "waxing gibbous", glyph: "🌔" },
+    tarot: { name: "The Sun", reversed: false, keywords: ["joy","success","vitality"] },
+    rune:  { name: "Sowilo", glyph: "ᛊ", keywords: ["sun","guidance","clarity"] },
+    planet_in_sign: "Sun in Taurus",
+  });
+  if (u.includes("/api/u/journal/unlock")) return fakeResp({ ok: true });
+  if (u.includes("/api/u/journal/entries") && opts?.method === "POST") return fakeResp({ id: 1, ok: true });
+  if (u.includes("/api/u/journal/entries/")) return fakeResp({ id: 1, date: "2025-04-26", body: "Test entry body.", mood: 4 });
+  if (u.includes("/api/u/journal/entries")) return fakeResp({ entries: [
+    { id: 1, date: "2025-04-26", preview: "Test entry body.", mood: 4 },
+  ]});
+
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -209,7 +295,7 @@ pass("breadcrumb default shows HOME");
 const home = document.querySelector(".screen-home");
 if (!home) fail("HOME screen not mounted");
 const menuItems = home.querySelectorAll(".menu-item");
-if (menuItems.length !== 12) fail("expected 12 menu items, got " + menuItems.length);
+if (menuItems.length !== 13) fail("expected 13 menu items, got " + menuItems.length);
 pass("HOME has " + menuItems.length + " menu items");
 
 document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "K" }));
@@ -708,5 +794,86 @@ if (!tlPreview) fail("TIMELINE EXPORT preview not rendered after click");
 if (!tlPreview.textContent.includes("D+417")) fail("TIMELINE EXPORT preview missing expected D+417 content");
 pass(`TIMELINE EXPORT preview renders: "${tlPreview.textContent.slice(0,40).trim()}..."`);
 
+
+
+// ---- Sprint 12+13 AUSPICE assertions ---------------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "U" }));
+await new Promise((r) => setTimeout(r, 120));
+const au = document.querySelector(".screen-auspice");
+if (!au) fail("AUSPICE screen not mounted on U");
+pass("press U then AUSPICE screen mounts");
+
+const auTabs = au.querySelectorAll(".kb-tab");
+if (auTabs.length !== 7) fail(`AUSPICE expected 7 tabs (S/C/T/O/D/J/A), got ${auTabs.length}`);
+pass(`AUSPICE has ${auTabs.length} sub-screen tabs`);
+
+// SKY — default sub-screen
+await new Promise((r) => setTimeout(r, 100));
+const auMoonPhase = au.querySelector(".au-moon-phase");
+if (!auMoonPhase) fail("AUSPICE SKY moon phase block not present");
+pass("AUSPICE SKY moon phase block renders");
+
+const auSkyGrid = au.querySelector(".au-sky-grid");
+if (!auSkyGrid) fail("AUSPICE SKY planet grid not present");
+pass("AUSPICE SKY planet grid renders");
+
+const auSkyRows = au.querySelectorAll(".au-sky-row");
+if (auSkyRows.length < 2) fail(`AUSPICE SKY expected >=2 planet rows, got ${auSkyRows.length}`);
+pass(`AUSPICE SKY shows ${auSkyRows.length} planet rows`);
+
+const auUpcoming = au.querySelector(".au-upcoming-list");
+if (!auUpcoming) fail("AUSPICE SKY upcoming events list not present");
+pass("AUSPICE SKY upcoming events list renders");
+
+// TAROT sub-screen
+auTabs[2].click();  // T
+await new Promise((r) => setTimeout(r, 80));
+const auSpreadSel = au.querySelector(".au-tarot-spread");
+if (!auSpreadSel) fail("AUSPICE TAROT spread selector not present");
+pass("AUSPICE TAROT spread selector renders");
+
+const auTarotBtn = au.querySelector(".au-tarot-btn");
+if (!auTarotBtn) fail("AUSPICE TAROT DRAW button not present");
+pass("AUSPICE TAROT DRAW button present");
+
+// Click DRAW → cards appear
+auTarotBtn.click();
+await new Promise((r) => setTimeout(r, 80));
+const auCards = au.querySelectorAll(".au-tarot-card");
+if (auCards.length < 3) fail(`AUSPICE TAROT expected >=3 card rows, got ${auCards.length}`);
+pass(`AUSPICE TAROT shows ${auCards.length} drawn cards`);
+
+// ORACLE sub-screen → I Ching
+auTabs[3].click();  // O
+await new Promise((r) => setTimeout(r, 60));
+const auIchingBtn = au.querySelector(".au-oracle-btn");
+if (!auIchingBtn) fail("AUSPICE ORACLE I Ching CAST button not present");
+pass("AUSPICE ORACLE I Ching CAST button present");
+
+auIchingBtn.click();
+await new Promise((r) => setTimeout(r, 80));
+const auHex = au.querySelector(".au-iching-card");
+if (!auHex) fail("AUSPICE ORACLE I Ching result card not rendered");
+pass("AUSPICE ORACLE I Ching result card renders after CAST");
+
+// DAILY sub-screen
+auTabs[4].click();  // D
+await new Promise((r) => setTimeout(r, 100));
+const auDailyCard = au.querySelector(".au-daily-card");
+if (!auDailyCard) fail("AUSPICE DAILY card not rendered");
+pass("AUSPICE DAILY card renders");
+
+// ALMANAC sub-screen
+auTabs[6].click();  // A
+await new Promise((r) => setTimeout(r, 100));
+const auSabbats = au.querySelectorAll(".au-sabbat-row");
+if (auSabbats.length < 8) fail(`AUSPICE ALMANAC expected >=8 sabbat rows, got ${auSabbats.length}`);
+pass(`AUSPICE ALMANAC shows ${auSabbats.length} sabbat rows`);
+
+const auLunarGrid = au.querySelector(".au-lunar-grid");
+if (!auLunarGrid) fail("AUSPICE ALMANAC lunar grid not rendered");
+pass("AUSPICE ALMANAC lunar calendar grid renders");
 
 console.log("\nALL CHECKS PASSED");
