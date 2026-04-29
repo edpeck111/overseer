@@ -143,15 +143,11 @@ def test_burn_rate_no_events():
 def test_burn_rate_with_events():
     cid = INV.cat_new("Food")
     iid = INV.item_new(cid, "Ration", qty=30)
-    # Simulate 3 consumption events spaced a day apart
+    # Simulate 3 consumption events spaced a day apart using backdated at=
     t0 = time.time() - 3 * 86400
-    from server.modules.inventory import _events, _ev_seq, InvEvent, _items
-    import server.modules.inventory as INV2
-    INV2._events[1] = InvEvent(id=1, item_id=iid, delta=-3, reason="day1", at=t0)
-    INV2._events[2] = InvEvent(id=2, item_id=iid, delta=-3, reason="day2", at=t0+86400)
-    INV2._events[3] = InvEvent(id=3, item_id=iid, delta=-3, reason="day3", at=t0+2*86400)
-    INV2._ev_seq = 3
-    INV2._items[iid].qty = 21   # reflect consumed
+    INV.event_log(iid, -3, "day1", at=t0)
+    INV.event_log(iid, -3, "day2", at=t0 + 86400)
+    INV.event_log(iid, -3, "day3", at=t0 + 2 * 86400)
     br = INV.burn_rate(iid)
     assert br["rate_per_day"] > 0
     assert br["days_remaining"] is not None
@@ -240,3 +236,6 @@ def test_pack_optimize_endpoint(client):
     assert r.status_code == 200
     j = r.get_json()
     assert "items" in j and "total_weight_g" in j
+
+# end
+

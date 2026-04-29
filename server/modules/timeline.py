@@ -8,20 +8,20 @@ Sprint 11. Implements the "UNION ALL" query layer described in the spec:
   - Causal threading: events ±window around a given event
   - Markdown export
 
-No new data is stored here — TIMELINE is a pure read layer over the
-in-memory stores already managed by each module.
+Sprint 18: adapters for log, inventory, and navigation now query SQLite
+directly. Comms and medical remain in-memory until their respective
+persistence sprints.
 """
 from __future__ import annotations
 
 import time
 from typing import Optional
 
+
 # ------------------------------------------------------------------ #
 # Uniform event shape
 # ------------------------------------------------------------------ #
 # {id, kind, who, body, at, module, ref_id}
-# kind uses dot notation: log.patrol, comms.recv, triage.run, etc.
-
 
 def _ev(module: str, kind: str, body: str, at: float,
         ref_id: Optional[int] = None, who: Optional[str] = None) -> dict:
@@ -40,26 +40,38 @@ def _ev(module: str, kind: str, body: str, at: float,
 
 def _events_from_log() -> list[dict]:
     try:
-        from server.modules.log import _entries
+        from server.db import get_db
+        db = get_db()
+        rows = db.execute("SELECT id, kind, body, at, author FROM log_entry").fetchall()
         return [
-            _ev("log", f"log.{e.kind}", e.body, e.at, ref_id=e.id)
-            for e in _entries.values()
+            _ev("log", f"log.{r['kind']}", r["body"], float(r["at"]),
+                ref_id=r["id"], who=r["author"])
+            for r in rows
         ]
     except Exception:
         return []
 
 
 def _events_from_comms() -> list[dict]:
+    """Comms persistence deferred to Sprint 21. Falls back to in-memory
+    if the module is loaded, silently returns empty if not."""
     try:
-        from server.modules.comms import _messages, _board_posts
-        evs: list[dict] = []
-        for m in _messages.values():
-            evs.append(_ev("comms", "comms.recv", f"{m.from_cs} → {m.to_cs}: {m.subj}",
-                           m.when, ref_id=m.id, who=m.from_cs))
-        for bp in _board_posts.values():
-            evs.append(_ev("comms", "comms.board",
-                           f"{bp.board} · {bp.from_cs}: {bp.subj}",
-                           bp.at, ref_id=bp.id, who=bp.from_cs))
+        from server.db import get_db
+        db = get_db()
+        rows = db.execute(
+            "SELECT id, sender, recipient, board, subject, body, at "
+            "FROM message ORDER BY at DESC LIMIT 500"
+        ).fetchall()
+        evs = []
+        for r in rows:
+            if r["board"]:
+                body = f"/{r['board']} · {r['sender']}: {r['subject'] or ''}"
+                kind = "comms.board"
+            else:
+                body = f"{r['sender']} → {r['recipient']}: {r['subject'] or ''}"
+                kind = "comms.recv"
+            evs.append(_ev("comms", kind, body, float(r["at"]),
+                           ref_id=r["id"], who=r["sender"]))
         return evs
     except Exception:
         return []
@@ -81,12 +93,14 @@ def _events_from_medical() -> list[dict]:
 
 def _events_from_navigation() -> list[dict]:
     try:
-        from server.modules.navigation import _waypoints
+        from server.db import get_db
+        db = get_db()
+        rows = db.execute("SELECT id, name, cat, created_at FROM waypoints").fetchall()
         return [
             _ev("navigation", "nav.waypoint",
-                f"Waypoint added: {w.name} ({w.cat})",
-                w.created_at, ref_id=w.id)
-            for w in _waypoints.values()
+                f"Waypoint added: {r['name']} ({r['cat']})",
+                float(r["created_at"]), ref_id=r["id"])
+            for r in rows
         ]
     except Exception:
         return []
@@ -94,15 +108,19 @@ def _events_from_navigation() -> list[dict]:
 
 def _events_from_inventory() -> list[dict]:
     try:
-        from server.modules.inventory import _events as inv_evs, _items
+        from server.db import get_db
+        db = get_db()
+        rows = db.execute(
+            "SELECT e.id, e.delta, e.reason, e.at, i.name "
+            "FROM inv_event e LEFT JOIN inv_item i ON i.id = e.item_id"
+        ).fetchall()
         result = []
-        for e in inv_evs.values():
-            it = _items.get(e.item_id)
-            name = it.name if it else f"item {e.item_id}"
-            verb = "consumed" if e.delta < 0 else "added"
+        for r in rows:
+            name = r["name"] or f"item {r['id']}"
+            verb = "consumed" if r["delta"] < 0 else "added"
             result.append(_ev("inventory", "inv.event",
-                               f"{name}: {verb} {abs(e.delta):.0f} ({e.reason})",
-                               e.at, ref_id=e.id))
+                               f"{name}: {verb} {abs(r['delta']):.0f} ({r['reason'] or ''})",
+                               float(r["at"]), ref_id=r["id"]))
         return result
     except Exception:
         return []
@@ -239,3 +257,6 @@ def register(app) -> None:
                             headers={"Content-Disposition":
                                      f'attachment; filename="timeline-{date_from}-{date_to}.md"'})
         return jsonify({"text": md})
+
+# ── end of module ─────────────────────────────────────────────────────────
+

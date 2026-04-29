@@ -289,7 +289,7 @@ window.fetch = async (url, opts) => {
   if (u.includes("/api/r/games")) return fakeResp({ games: [
     { id:"chess",  name:"Chess",          status:"available",    hotkey:"C" },
     { id:"zork",   name:"Bunker Adventure",status:"available",   hotkey:"Z" },
-    { id:"dragon", name:"Dragon's Tale",  status:"coming Sprint 16", hotkey:"D" },
+    { id:"dragon", name:"Dragon's Tale",  status:"available", hotkey:"D" },
     { id:"fortune",name:"Fortune",        status:"available",    hotkey:"F" },
     { id:"wiki",   name:"Wiki Roulette",  status:"available",    hotkey:"W" },
     { id:"reader", name:"Reader",         status:"available",    hotkey:"R" },
@@ -303,6 +303,30 @@ window.fetch = async (url, opts) => {
   if (u.includes("/api/r/zork/") && u.includes("/cmd")) return fakeResp({ response: "You head north into the command room.", room: "command_room", inv:[], done: false });
   if (u.includes("/api/r/reader/progress") && opts?.method === "POST") return fakeResp({ archive:"wikipedia", article:"Bowline", position:0.42, bookmark:null, updated:1714086840 });
   if (u.includes("/api/r/reader/progress")) return fakeResp({ progress: [] });
+
+  // DRAGON mocks (Sprint 16)
+  if (u.includes("/api/r/dragon/start")) {
+    const sid = (await new Response(opts?.body).json()).session || "d-test";
+    return fakeResp({ session: sid, response: "You stand in the village square. A notice board lists quests.", done: false, won: false, room: "village_square", hp: 20, max_hp: 20, inv: [] });
+  }
+  if (u.includes("/api/r/dragon/") && u.includes("/cmd")) return fakeResp({ response: "You head north to the blacksmith forge.", done: false, won: false, room: "blacksmith_forge", hp: 20, max_hp: 20, inv: [] });
+
+  // SYSTEM mocks (Sprint 17)
+  if (u.includes("/api/x/info"))     return fakeResp({ node:"overseer", os:"Linux 6.1.0", arch:"aarch64", python:"3.10.12", cpu_cores:4, load_1m:0.12, uptime_s:86400, disk:{ total_gb:32.0, free_gb:18.3 }, at:Date.now()/1000 });
+  if (u.includes("/api/x/users") && (!opts || opts.method !== "POST" && opts.method !== "DELETE"))
+    return fakeResp({ users: [
+      { uid:"ALPHA-1", callsign:"ALPHA-1", role:"admin",    last_seen: Date.now()/1000-120, active:true  },
+      { uid:"BRAVO-2", callsign:"BRAVO-2", role:"operator", last_seen: Date.now()/1000-3600, active:true },
+    ]});
+  if (u.includes("/api/x/users") && opts?.method === "POST") return fakeResp({ uid:"TEST-9", callsign:"TEST-9", role:"observer", last_seen:null, active:false });
+  if (u.includes("/api/x/settings") && opts?.method === "POST") return fakeResp({ key:"theme", value:"dark" });
+  if (u.includes("/api/x/settings")) return fakeResp({ settings: { callsign:"ALPHA-1", tz:"UTC", theme:"dark" } });
+  if (u.includes("/api/x/backup/trigger")) return fakeResp({ ok:true, job:{ id:1, target:"Full DB", status:"pending" } });
+  if (u.includes("/api/x/backup"))  return fakeResp({ jobs: [
+    { id:1, target:"Full DB",    path:"/mnt/usb0/db.tar.gz",     status:"ok",      size_mb:82.4, at:Date.now()/1000-7200 },
+    { id:2, target:"Config",     path:"/mnt/usb0/config.tar.gz", status:"ok",      size_mb:1.2,  at:Date.now()/1000-7200 },
+    { id:3, target:"Knowledge",  path:"/mnt/usb0/know.tar.gz",   status:"pending", size_mb:0.0,  at:Date.now()/1000-60   },
+  ]});
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -973,7 +997,7 @@ if (!rec) fail("RECREATION screen not mounted on R");
 pass("press R then RECREATION screen mounts");
 
 const recTabs = rec.querySelectorAll(".kb-tab");
-if (recTabs.length !== 6) fail(`RECREATION expected 6 tabs, got ${recTabs.length}`);
+if (recTabs.length !== 7) fail(`RECREATION expected 7 tabs, got ${recTabs.length}`);
 pass(`RECREATION has ${recTabs.length} sub-screen tabs`);
 
 // FORTUNE sub-screen (default) - draw a fortune
@@ -1001,5 +1025,102 @@ await new Promise((r) => setTimeout(r, 80));
 const gameRows = rec.querySelectorAll(".rec-game-row");
 if (gameRows.length < 1) fail(`RECREATION GAMES expected >=1 game rows, got ${gameRows.length}`);
 pass(`RECREATION GAMES shows ${gameRows.length} games`);
+
+
+// ---- Sprint 16 DRAGON smoke assertions ---------------------------
+// Navigate to recreation, switch to dragon tab
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "R" }));
+await new Promise((r) => setTimeout(r, 120));
+const rec2 = document.querySelector(".screen-recreation");
+if (!rec2) fail("RECREATION screen not mounted for dragon test");
+
+// Now 7 tabs (F/W/G/C/Z/R/D)
+const recTabs2 = rec2.querySelectorAll(".kb-tab");
+if (recTabs2.length !== 7) fail(`RECREATION expected 7 tabs (with dragon), got ${recTabs2.length}`);
+pass(`RECREATION has ${recTabs2.length} tabs including dragon`);
+
+// Click dragon tab (index 6)
+recTabs2[6].click();
+await new Promise((r) => setTimeout(r, 80));
+const dragonStart = rec2.querySelector(".rec-dragon-start");
+if (!dragonStart) fail("RECREATION DRAGON start button missing");
+pass("RECREATION DRAGON start button present");
+
+// Start dragon adventure
+dragonStart.click();
+await new Promise((r) => setTimeout(r, 120));
+const dragonHist = rec2.querySelector(".rec-dragon-hist");
+if (!dragonHist) fail("RECREATION DRAGON history panel not rendered after start");
+pass("RECREATION DRAGON history panel renders after start");
+
+const dragonInp = rec2.querySelector(".rec-dragon-inp");
+if (!dragonInp) fail("RECREATION DRAGON command input missing");
+pass("RECREATION DRAGON command input present");
+
+// ---- Sprint 17 SYSTEM smoke assertions ---------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "X" }));
+await new Promise((r) => setTimeout(r, 120));
+const sys = document.querySelector(".screen-system");
+if (!sys) fail("SYSTEM screen not mounted on X");
+pass("press X → SYSTEM screen mounts");
+
+const sysTabs = sys.querySelectorAll(".kb-tab");
+if (sysTabs.length !== 4) fail(`SYSTEM expected 4 tabs, got ${sysTabs.length}`);
+pass(`SYSTEM has ${sysTabs.length} sub-screen tabs`);
+
+// INFO sub-screen (default)
+const infoGrid = sys.querySelector(".sys-kv-grid");
+if (!infoGrid) fail("SYSTEM INFO kv-grid not rendered");
+pass("SYSTEM INFO kv-grid present");
+
+// USERS sub-screen
+sysTabs[1].click();
+await new Promise((r) => setTimeout(r, 80));
+const userRows = sys.querySelectorAll(".sys-user-row:not(.sys-user-hdr)");
+if (userRows.length < 1) fail(`SYSTEM USERS expected >=1 user rows, got ${userRows.length}`);
+pass(`SYSTEM USERS shows ${userRows.length} users`);
+
+// SETTINGS sub-screen
+sysTabs[2].click();
+await new Promise((r) => setTimeout(r, 80));
+const settingRows = sys.querySelectorAll(".sys-setting-row");
+if (settingRows.length < 1) fail(`SYSTEM SETTINGS expected >=1 setting rows, got ${settingRows.length}`);
+pass(`SYSTEM SETTINGS shows ${settingRows.length} settings`);
+
+// BACKUP sub-screen
+sysTabs[3].click();
+await new Promise((r) => setTimeout(r, 80));
+const backupRows = sys.querySelectorAll(".sys-backup-row");
+if (backupRows.length < 1) fail(`SYSTEM BACKUP expected >=1 backup rows, got ${backupRows.length}`);
+pass(`SYSTEM BACKUP shows ${backupRows.length} jobs`);
+
+// ---- Sprint 17 HELP smoke assertions ---------------------------
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "?" }));
+await new Promise((r) => setTimeout(r, 120));
+const hlp = document.querySelector(".screen-help");
+if (!hlp) fail("HELP screen not mounted on ?");
+pass("press ? → HELP screen mounts");
+
+const hlpTabs = hlp.querySelectorAll(".kb-tab");
+if (hlpTabs.length !== 4) fail(`HELP expected 4 tabs, got ${hlpTabs.length}`);
+pass(`HELP has ${hlpTabs.length} sub-screen tabs`);
+
+// HOTKEYS sub-screen (default)
+const hlpRows = hlp.querySelectorAll(".hlp-hotkey-row");
+if (hlpRows.length < 1) fail(`HELP HOTKEYS expected >=1 rows, got ${hlpRows.length}`);
+pass(`HELP HOTKEYS shows ${hlpRows.length} hotkey rows`);
+
+// COMMANDS sub-screen
+hlpTabs[1].click();
+await new Promise((r) => setTimeout(r, 60));
+const hlpCmds = hlp.querySelector(".hlp-cmd-list, .hlp-section-title");
+if (!hlpCmds) fail("HELP COMMANDS section not rendered");
+pass("HELP COMMANDS section renders");
 
 console.log("\nALL CHECKS PASSED");

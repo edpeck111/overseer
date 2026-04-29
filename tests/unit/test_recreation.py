@@ -252,10 +252,10 @@ class TestGamesRegistry:
         ids = {g["id"] for g in games_list()}
         assert "chess" in ids and "zork" in ids
 
-    def test_dragon_is_placeholder(self):
+    def test_dragon_is_available(self):
         from server.modules.recreation import games_list
         dragon = next(g for g in games_list() if g["id"] == "dragon")
-        assert "sprint 16" in dragon["status"].lower()
+        assert dragon["status"].lower() == "available"
 
     def test_all_have_hotkey(self):
         from server.modules.recreation import games_list

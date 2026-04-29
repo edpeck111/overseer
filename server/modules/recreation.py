@@ -257,7 +257,7 @@ def reader_list_progress() -> list[dict]:
 
 # ── game registry ──────────────────────────────────────────────────────────
 _GAMES = [
-    {"id": "dragon",  "name": "Dragon's Tale",  "status": "coming Sprint 16", "hotkey": "D"},
+    {"id": "dragon",  "name": "Dragon's Tale",  "status": "available",        "hotkey": "D"},
     {"id": "trader",  "name": "Trader",          "status": "coming Sprint 16", "hotkey": "T"},
     {"id": "chess",   "name": "Chess",           "status": "available",        "hotkey": "C"},
     {"id": "zork",    "name": "Bunker Adventure","status": "available",        "hotkey": "Z"},
@@ -273,8 +273,388 @@ def fortune_get() -> dict:
     return {"quote": random.choice(_FORTUNES)}
 
 def reset_for_tests():
-    global _reading, _chess, _zork, _seq
-    _reading = {}; _chess = {}; _zork = {}; _seq = 0
+    global _reading, _chess, _zork, _dragon, _seq
+    _reading = {}; _chess = {}; _zork = {}; _dragon = {}; _seq = 0
+
+# ── Dragon's Tale text adventure ──────────────────────────────────────────────
+# Fantasy text adventure as recreational escapism. 10 rooms, combat,
+# inventory, quest completion (slay the Ashen Dragon or find the secret ending).
+
+from dataclasses import dataclass, field as dc_field
+from typing import Optional
+
+@dataclass
+class DragonState:
+    room:    str
+    inv:     list
+    history: list      # (cmd, response) pairs
+    hp:      int
+    max_hp:  int
+    done:    bool
+    won:     bool
+    enemies: dict      # room -> {hp: int} for tracked enemies
+    flags:   set       # progression flags (using list for JSON compat)
+
+_dragon: dict = {}   # session -> DragonState
+
+_DR_ROOMS = {
+    "village_square": {
+        "desc": "Crumbling cobblestones, a dry fountain. Ravens watch from charred eaves. "
+                "A FORGE smokes faintly to the NORTH. Market ruins lie to the EAST. "
+                "A CELLAR DOOR is half-buried in the rubble at your feet.",
+        "exits": {"north": "blacksmith_forge", "east": "market_ruins",
+                  "down": "hidden_cellar"},
+        "items": [],
+        "hidden_exit": "down",
+    },
+    "blacksmith_forge": {
+        "desc": "The forge still holds heat — someone was here recently. Tongs, hammers, "
+                "and a SWORD hang on the wall. Ash coats everything. "
+                "Exits: SOUTH (village square), EAST (forest path).",
+        "exits": {"south": "village_square", "east": "forest_path"},
+        "items": ["sword"],
+    },
+    "market_ruins": {
+        "desc": "Collapsed stalls, scattered coins, overturned carts. A cracked SHIELD "
+                "leans against a pillar. Crows pick at something unseen. "
+                "Exits: WEST (village square), NORTH (forest path).",
+        "exits": {"west": "village_square", "north": "forest_path"},
+        "items": ["shield", "torch"],
+    },
+    "forest_path": {
+        "desc": "Ancient oaks close overhead, filtering grey light. Mud tracks lead "
+                "NORTH to an old bridge, WEST to the forge, SOUTH back to the market, "
+                "and EAST to a cave entrance.",
+        "exits": {"north": "old_bridge", "west": "blacksmith_forge",
+                  "south": "market_ruins", "east": "cave_entrance"},
+        "items": [],
+    },
+    "old_bridge": {
+        "desc": "A stone bridge over a black river. Halfway across, a STONE TROLL "
+                "blocks the path. It eyes your pack hungrily. "
+                "Exits: SOUTH (forest), NORTH (dark tower — if troll is gone).",
+        "exits": {"south": "forest_path"},
+        "items": [],
+        "enemy": {"name": "Stone Troll", "max_hp": 12, "atk": 3, "drop": "troll_tooth",
+                  "guard_exit": "north", "guard_dest": "dark_tower"},
+    },
+    "cave_entrance": {
+        "desc": "The cave mouth breathes cold air. A GOBLIN SCOUT crouches behind a "
+                "rock, clutching a rusty knife. Dripping water echoes from DEEPER IN. "
+                "Exits: WEST (forest), DEEPER (east — into cave depths).",
+        "exits": {"west": "forest_path"},
+        "items": [],
+        "enemy": {"name": "Goblin Scout", "max_hp": 6, "atk": 2, "drop": "goblin_key",
+                  "guard_exit": "east", "guard_dest": "cave_depths"},
+    },
+    "cave_depths": {
+        "desc": "Crystals catch your torchlight (if you have one). A brass CHEST sits "
+                "open — someone beat you here. But a HEALING POTION remains, spilled "
+                "but salvageable. Graffiti on the wall: 'The tower. The scale. The way out.' "
+                "Exits: WEST (cave entrance).",
+        "exits": {"west": "cave_entrance"},
+        "items": ["healing_potion"],
+    },
+    "dark_tower": {
+        "desc": "The tower door is iron-banded oak. A FALLEN KNIGHT in black armour "
+                "slumps against the wall — dead, but unnaturally animate. It stirs as "
+                "you approach. Stairs spiral UP to the battlements. "
+                "Exits: SOUTH (bridge), UP (battlements).",
+        "exits": {"south": "old_bridge"},
+        "items": [],
+        "enemy": {"name": "Fallen Knight", "max_hp": 18, "atk": 5, "drop": "knight_helm",
+                  "guard_exit": "up", "guard_dest": "tower_battlements"},
+    },
+    "tower_battlements": {
+        "desc": "Wind screams across the parapet. The ASHEN DRAGON coils around the "
+                "highest merlon, scales the colour of dead embers. Its eyes open — "
+                "two coals, slow and certain. It knows you came for it. "
+                "Exits: DOWN (tower).",
+        "exits": {"down": "dark_tower"},
+        "items": [],
+        "enemy": {"name": "Ashen Dragon", "max_hp": 30, "atk": 8, "drop": "dragon_scale",
+                  "is_final": True},
+    },
+    "hidden_cellar": {
+        "desc": "A dusty cellar. Racks of old wine, most broken. A LEATHER JOURNAL "
+                "lies open on a table: 'The dragon brought the collapse. Its scale is "
+                "the cure. Take it to the well.' A HEALING POTION sits beside it. "
+                "Exits: UP (village square).",
+        "exits": {"up": "village_square"},
+        "items": ["cellar_potion", "journal"],
+    },
+}
+
+_DR_ITEMS = {
+    "sword":         {"desc": "A balanced short sword. Still sharp.", "atk_bonus": 3},
+    "shield":        {"desc": "A cracked iron shield, still serviceable.", "def_bonus": 2},
+    "torch":         {"desc": "A pitch-black torch. Unlit but useful.", "light": True},
+    "healing_potion":{"desc": "A vial of cloudy liquid. Restores 10 HP.", "heal": 10},
+    "cellar_potion": {"desc": "An older potion, dusty but intact. Restores 8 HP.", "heal": 8},
+    "goblin_key":    {"desc": "A crude iron key. Opens something small."},
+    "troll_tooth":   {"desc": "A massive yellow tooth. Souvenir."},
+    "knight_helm":   {"desc": "A visored helm of black iron. Heavy."},
+    "dragon_scale":  {"desc": "An ember-grey scale, warm to the touch. The quest object.",
+                      "quest": True},
+    "journal":       {"desc": "A leather journal. 'The dragon brought the collapse. "
+                               "Its scale is the cure. Take it to the well.'"},
+}
+
+_DR_PLAYER_ATK  = 4   # base attack
+_DR_PLAYER_DEF  = 0   # base defence
+
+def _dr_atk(inv: list) -> int:
+    bonus = sum(_DR_ITEMS.get(i, {}).get("atk_bonus", 0) for i in inv)
+    return _DR_PLAYER_ATK + bonus
+
+def _dr_def(inv: list) -> int:
+    bonus = sum(_DR_ITEMS.get(i, {}).get("def_bonus", 0) for i in inv)
+    return _DR_PLAYER_DEF + bonus
+
+def _dr_room(state: DragonState):
+    return _DR_ROOMS.get(state.room, _DR_ROOMS["village_square"])
+
+def _dr_enemy_hp(state: DragonState) -> int:
+    return state.enemies.get(state.room, {}).get("hp", 0)
+
+def _dr_init_enemies() -> dict:
+    """Build initial enemy HP map from room definitions."""
+    result = {}
+    for rk, rv in _DR_ROOMS.items():
+        if "enemy" in rv:
+            result[rk] = {"hp": rv["enemy"]["max_hp"]}
+    return result
+
+def _dr_cmd(state: DragonState, cmd: str) -> str:
+    import random as _r
+    cmd = cmd.strip().lower()
+    room = _dr_room(state)
+
+    # ── LOOK ──────────────────────────────────────────────────────────────
+    if cmd in ("look", "l", ""):
+        out = room["desc"]
+        items = [i for i in room.get("items", []) if i not in state.flags]
+        if items:
+            out += f"\nItems: {', '.join(i.replace('_',' ') for i in items)}"
+        enemy_def = room.get("enemy")
+        ehp = _dr_enemy_hp(state)
+        if enemy_def and ehp > 0:
+            out += f"\nEnemy: {enemy_def['name']} (HP {ehp}/{enemy_def['max_hp']})"
+        out += f"\nHP: {state.hp}/{state.max_hp}   ATK: {_dr_atk(state.inv)}   DEF: {_dr_def(state.inv)}"
+        if state.inv:
+            out += f"\nCarrying: {', '.join(i.replace('_',' ') for i in state.inv)}"
+        return out
+
+    # ── STATUS ─────────────────────────────────────────────────────────────
+    if cmd in ("status", "stat", "stats"):
+        return (f"HP: {state.hp}/{state.max_hp}  ATK: {_dr_atk(state.inv)}  "
+                f"DEF: {_dr_def(state.inv)}\n"
+                f"Inventory: {', '.join(i.replace('_',' ') for i in state.inv) or 'nothing'}")
+
+    # ── GO ─────────────────────────────────────────────────────────────────
+    if cmd.startswith("go ") or cmd in room["exits"]:
+        direction = cmd.replace("go ", "").strip() if cmd.startswith("go ") else cmd
+        enemy_def = room.get("enemy")
+        ehp = _dr_enemy_hp(state)
+        # Blocked by living enemy?
+        if enemy_def and ehp > 0 and direction == enemy_def.get("guard_exit"):
+            return f"The {enemy_def['name']} blocks your path. Deal with it first."
+        # Normal exit
+        dest = room["exits"].get(direction)
+        if not dest and enemy_def and ehp <= 0:
+            dest = enemy_def.get("guard_dest") if direction == enemy_def.get("guard_exit") else None
+        if not dest:
+            # Check if enemy was cleared for guard_dest
+            if enemy_def and direction == enemy_def.get("guard_exit"):
+                dest = enemy_def.get("guard_dest")
+        if dest:
+            state.room = dest
+            new_room = _DR_ROOMS.get(dest, {})
+            out = new_room.get("desc", "You move to a new area.")
+            new_enemy = new_room.get("enemy")
+            new_ehp = _dr_enemy_hp(state)
+            if new_enemy and new_ehp > 0:
+                out += f"\n\n{new_enemy['name']} is here! (HP {new_ehp})"
+            return out
+        return f"You can't go {direction} from here."
+
+    # ── TAKE / GET ─────────────────────────────────────────────────────────
+    if cmd.startswith(("take ", "get ", "pick up ")):
+        item = cmd.split(None, 2)[-1].strip().replace(" ", "_")
+        room_items = room.get("items", [])
+        picked_items = [i for i in room_items if i not in state.flags]
+        if item in picked_items:
+            state.flags.add(f"taken_{item}")
+            room_items.remove(item)
+            state.inv.append(item)
+            desc = _DR_ITEMS.get(item, {}).get("desc", "")
+            return f"You take the {item.replace('_',' ')}. {desc}"
+        return f"There's no {item.replace('_',' ')} here."
+
+    # ── USE ────────────────────────────────────────────────────────────────
+    if cmd.startswith("use "):
+        item = cmd[4:].strip().replace(" ", "_")
+        if item not in state.inv:
+            return f"You don't have a {item.replace('_',' ')}."
+        item_def = _DR_ITEMS.get(item, {})
+        if "heal" in item_def:
+            healed = min(item_def["heal"], state.max_hp - state.hp)
+            state.hp = min(state.max_hp, state.hp + item_def["heal"])
+            state.inv.remove(item)
+            return f"You drink the {item.replace('_',' ')}. +{healed} HP. HP: {state.hp}/{state.max_hp}"
+        if item_def.get("quest"):
+            return ("The dragon scale pulses warmly. You need to take it to the well.")
+        if item_def.get("light"):
+            return "You hold the torch aloft, casting amber light."
+        return f"You turn the {item.replace('_',' ')} over in your hands. Nothing happens."
+
+    # ── EXAMINE ────────────────────────────────────────────────────────────
+    if cmd.startswith(("examine ", "x ", "inspect ")):
+        item = cmd.split(None, 1)[1].strip().replace(" ", "_")
+        idef = _DR_ITEMS.get(item)
+        if idef:
+            return idef["desc"]
+        return f"You see nothing special about the {item.replace('_',' ')}."
+
+    # ── INVENTORY ──────────────────────────────────────────────────────────
+    if cmd in ("inventory", "i", "inv"):
+        if not state.inv:
+            return "You carry nothing."
+        lines = []
+        for item in state.inv:
+            idef = _DR_ITEMS.get(item, {})
+            bonus = []
+            if "atk_bonus" in idef: bonus.append(f"+{idef['atk_bonus']} ATK")
+            if "def_bonus" in idef: bonus.append(f"+{idef['def_bonus']} DEF")
+            if "heal" in idef:      bonus.append(f"+{idef['heal']} HP when used")
+            b = f" ({', '.join(bonus)})" if bonus else ""
+            lines.append(f"  {item.replace('_',' ')}{b}")
+        return "Carrying:\n" + "\n".join(lines)
+
+    # ── ATTACK ─────────────────────────────────────────────────────────────
+    if cmd in ("attack", "fight", "a", "atk") or cmd.startswith("attack "):
+        import random as _r
+        enemy_def = room.get("enemy")
+        ehp = _dr_enemy_hp(state)
+        if not enemy_def or ehp <= 0:
+            return "There's nothing to fight here."
+        # Player attacks
+        p_dmg = max(1, _r.randint(1, _dr_atk(state.inv)) - _r.randint(0, 1))
+        new_ehp = max(0, ehp - p_dmg)
+        state.enemies[state.room]["hp"] = new_ehp
+        lines = [f"You strike the {enemy_def['name']} for {p_dmg} damage. "
+                 f"({enemy_def['name']} HP: {new_ehp}/{enemy_def['max_hp']})"]
+        # Enemy dead?
+        if new_ehp <= 0:
+            drop = enemy_def.get("drop")
+            if drop:
+                room.setdefault("items", []).append(drop)
+                lines.append(f"The {enemy_def['name']} falls! It drops a {drop.replace('_',' ')}.")
+            else:
+                lines.append(f"The {enemy_def['name']} crumbles and falls!")
+            if enemy_def.get("is_final"):
+                state.done = True
+                state.won  = True
+                lines.append("\nThe Ashen Dragon shudders and collapses. The ember-light "
+                             "fades from its eyes. A DRAGON SCALE lies at your feet.\n"
+                             "You have completed Dragon's Tale. The kingdom can breathe again.")
+            return "\n".join(lines)
+        # Enemy counter-attacks
+        e_dmg = max(0, _r.randint(1, enemy_def["atk"]) - _dr_def(state.inv))
+        state.hp -= e_dmg
+        lines.append(f"The {enemy_def['name']} retaliates for {e_dmg} damage. "
+                     f"(Your HP: {state.hp}/{state.max_hp})")
+        if state.hp <= 0:
+            state.done = True
+            state.won  = False
+            lines.append(f"\nThe {enemy_def['name']} delivers the killing blow. "
+                         "The world fades to black.\n-- GAME OVER -- (type 'restart' to play again)")
+        return "\n".join(lines)
+
+    # ── FLEE ───────────────────────────────────────────────────────────────
+    if cmd in ("flee", "run", "escape"):
+        enemy_def = room.get("enemy")
+        ehp = _dr_enemy_hp(state)
+        if not enemy_def or ehp <= 0:
+            return "Nothing to flee from."
+        exits = [d for d in room["exits"] if d != enemy_def.get("guard_exit", "")]
+        if not exits:
+            return "No way to retreat!"
+        import random as _r
+        direction = _r.choice(exits)
+        dest = room["exits"][direction]
+        state.room = dest
+        e_dmg = max(0, enemy_def["atk"] // 2 - _dr_def(state.inv))
+        state.hp -= e_dmg
+        out = f"You flee {direction}! The {enemy_def['name']} clips you as you run ({e_dmg} dmg)."
+        out += f"\nHP: {state.hp}/{state.max_hp}"
+        if state.hp <= 0:
+            state.done = True; state.won = False
+            out += "\nYou collapse from your wounds.\n-- GAME OVER --"
+        return out
+
+    # ── RESTART ────────────────────────────────────────────────────────────
+    if cmd in ("restart", "new", "reset"):
+        state.room = "village_square"
+        state.inv  = []
+        state.hp   = state.max_hp
+        state.done = False
+        state.won  = False
+        state.enemies = _dr_init_enemies()
+        state.flags   = set()
+        # Reset room items
+        for rk, rv in _DR_ROOMS.items():
+            if rk in _DR_ITEMS:
+                pass  # items are stored in room dict directly
+        return "You begin again.\n\n" + _DR_ROOMS["village_square"]["desc"]
+
+    # ── QUIT ───────────────────────────────────────────────────────────────
+    if cmd in ("quit", "q", "exit"):
+        state.done = True; state.won = False
+        return "You set down your sword. The adventure pauses."
+
+    # ── HELP ───────────────────────────────────────────────────────────────
+    if cmd in ("help", "?", "h"):
+        return ("Commands: look (l), go <dir>, take/get <item>, examine/x <item>, "
+                "inventory (i), use <item>, attack (a), flee, status, restart, quit.\n"
+                "Directions: north/south/east/west/up/down.")
+
+    return f"I don't understand '{cmd}'."
+
+
+def dragon_start(session: str) -> dict:
+    # Reset room items to originals each new game
+    import copy
+    for rk, rv in _DR_ROOMS.items():
+        rv["items"] = list(_DR_ROOMS_ORIG.get(rk, {}).get("items", []))
+    state = DragonState(
+        room="village_square", inv=[], history=[], hp=20, max_hp=20,
+        done=False, won=False, enemies=_dr_init_enemies(), flags=set(),
+    )
+    _dragon[session] = state
+    intro = ("Dragon's Tale\n"
+             "A kingdom in ash. One creature responsible.\n\n")
+    intro += _dr_cmd(state, "look")
+    state.history.append(("", intro))
+    return {"session": session, "response": intro, "hp": state.hp,
+            "max_hp": state.max_hp, "done": False, "won": False}
+
+
+def dragon_cmd(session: str, cmd: str) -> dict:
+    state = _dragon.get(session)
+    if not state:
+        return {"error": "session not found"}
+    resp = _dr_cmd(state, cmd)
+    state.history.append((cmd, resp))
+    return {"response": resp, "room": state.room, "inv": state.inv,
+            "hp": state.hp, "max_hp": state.max_hp,
+            "done": state.done, "won": state.won}
+
+
+# Preserve original room items for restart
+_DR_ROOMS_ORIG = {rk: {"items": list(rv.get("items", []))}
+                  for rk, rv in _DR_ROOMS.items()}
+
 
 # ── Flask routes ───────────────────────────────────────────────────────────
 def register(app):
@@ -327,6 +707,18 @@ def register(app):
         intro = _zork_cmd(state, "look")
         state.history.append(("look", intro))
         return jsonify({"session": sid, "response": intro, "done": False})
+
+
+    @app.route("/api/r/dragon/start", methods=["POST"])
+    def _dragon_start():
+        sid = (request.json or {}).get("session", f"d{int(time.time())}")
+        return jsonify(dragon_start(sid))
+
+    @app.route("/api/r/dragon/<session>/cmd", methods=["POST"])
+    def _dragon_cmd_route(session):
+        cmd = (request.json or {}).get("cmd", "")
+        r = dragon_cmd(session, cmd)
+        return (jsonify(r), 404) if "error" in r else jsonify(r)
 
     @app.route("/api/r/zork/<session>/cmd", methods=["POST"])
     def _zork_cmd_route(session):

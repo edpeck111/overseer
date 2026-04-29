@@ -12,7 +12,7 @@
 
 import { el } from "../chrome/_dom.js";
 
-const SUBS = { F:"fortune", W:"wiki", G:"games", C:"chess", Z:"zork", R:"reader" };
+const SUBS = { F:"fortune", W:"wiki", G:"games", C:"chess", Z:"zork", R:"reader", D:"dragon" };
 
 const local = {
   sub: "fortune",
@@ -29,6 +29,11 @@ const local = {
   zorkDone: false,
   // reader
   reading: null,
+  // dragon
+  dragonSession: null,
+  dragonHistory: [],
+  dragonDone: false,
+  dragonWon: false,
 };
 
 export function mountRecreation(root, store, ctx) {
@@ -39,8 +44,8 @@ export function mountRecreation(root, store, ctx) {
   screen.append(tabs, body);
 
   function paint() {
-    const labels = ["fortune","wiki","games","chess","zork","reader"];
-    const keys   = "FWGCZR";
+    const labels = ["fortune","wiki","games","chess","zork","reader","dragon"];
+    const keys   = "FWGCZRD";
     tabs.replaceChildren(...labels.map((s, i) => {
       const t = el("span", "kb-tab" + (local.sub === s ? " active" : ""));
       t.append(el("span", "k", keys[i]), el("span", "l", s));
@@ -55,6 +60,7 @@ export function mountRecreation(root, store, ctx) {
       case "chess":   paintChess(body);   break;
       case "zork":    paintZork(body);    break;
       case "reader":  paintReader(body);  break;
+      case "dragon":  paintDragon(body); break;
     }
   }
 
@@ -307,6 +313,84 @@ export function mountRecreation(root, store, ctx) {
     refresh.addEventListener("click", () => { local.reading = null; paint(); });
   }
 
+
+  // ── DRAGON'S TALE ────────────────────────────────────────────────────────
+  function paintDragon(c) {
+    const hdr = el("div", "rec-hdr");
+    hdr.append(el("div", "rec-title", "DRAGON'S TALE"));
+    c.append(hdr);
+
+    if (!local.dragonSession) {
+      const startBtn = el("button", "kb-btn rec-dragon-start", "[ ENTER THE REALM ]");
+      c.append(el("div", "rec-empty", "An ancient adventure awaits..."), startBtn);
+      startBtn.addEventListener("click", () => {
+        const sid = "d" + Date.now();
+        fetch("/api/r/dragon/start", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({session: sid}),
+        }).then(r => r.json()).then(d => {
+          local.dragonSession = d.session;
+          local.dragonHistory = [["", d.response]];
+          local.dragonDone = d.done;
+          local.dragonWon  = d.won;
+          paint();
+        });
+      });
+      return;
+    }
+
+    const status = el("div", "rec-dragon-status");
+    if (local.dragonDone) {
+      status.append(el("span", "rec-accent", local.dragonWon ? "⚔ VICTORY" : "✝ DEFEATED"));
+    }
+    c.append(status);
+
+    const hist = el("div", "rec-dragon-hist");
+    for (const [cmd, resp] of local.dragonHistory) {
+      if (cmd) hist.append(el("div", "rec-dragon-cmd", "> " + cmd));
+      hist.append(el("div", "rec-dragon-resp", resp));
+    }
+    c.append(hist);
+
+    if (!local.dragonDone) {
+      const inputRow = el("div", "rec-zork-input-row");
+      const prompt = el("span", "rec-accent", "> ");
+      const inp = el("input", "rec-dragon-inp");
+      inp.placeholder = "look, go north, attack, use potion...";
+      inputRow.append(prompt, inp);
+      c.append(inputRow);
+
+      inp.focus();
+      inp.addEventListener("keydown", e => {
+        if (e.key !== "Enter") return;
+        const cmd = inp.value.trim();
+        if (!cmd) return;
+        fetch("/api/r/dragon/" + local.dragonSession + "/cmd", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({cmd}),
+        }).then(r => r.json()).then(d => {
+          local.dragonHistory.push([cmd, d.response]);
+          local.dragonDone = d.done;
+          local.dragonWon  = d.won;
+          paint();
+          setTimeout(() => {
+            const h = body.querySelector(".rec-dragon-hist");
+            if (h) h.scrollTop = h.scrollHeight;
+          }, 10);
+        });
+      });
+    } else {
+      const restart = el("button", "kb-btn", "[ PLAY AGAIN ]");
+      restart.addEventListener("click", () => {
+        local.dragonSession = null; local.dragonHistory = [];
+        local.dragonDone = false; local.dragonWon = false;
+        paint();
+      });
+      c.append(restart);
+    }
+  }
   // ── keyboard ──────────────────────────────────────────────────────────────
   function onKey(e) {
     const k = e.key.toUpperCase();

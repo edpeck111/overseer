@@ -17,55 +17,12 @@ import os
 import time
 from dataclasses import dataclass, field
 from typing import Optional
-
-# ------------------------------------------------------------------ #
-# Data model (in-memory)
-# ------------------------------------------------------------------ #
+from server.db import get_db, reset_tables
 
 KINDS = (
     "observation", "decision", "patrol", "ration", "incident",
     "triage", "comms", "system", "note",
 )
-
-@dataclass
-class LogEntry:
-    id: int
-    kind: str
-    body: str
-    tags: list
-    at: float
-    source: str = "user"          # user | auto | imported
-    lat: Optional[float] = None
-    lon: Optional[float] = None
-    weather_json: Optional[dict] = None
-    mood: Optional[int] = None
-    energy: Optional[int] = None
-    photo_text: Optional[str] = None   # OCR result if photo attached
-    ref_table: Optional[str] = None    # for auto entries
-    ref_id: Optional[int] = None
-
-@dataclass
-class DailySummary:
-    date: str           # ISO YYYY-MM-DD
-    summary_text: str
-    approved_at: Optional[float] = None
-
-
-_entries: dict[int, LogEntry] = {}
-_summaries: dict[str, DailySummary] = {}
-_seq = 0
-
-
-def reset_for_tests() -> None:
-    global _entries, _summaries, _seq
-    _entries = {}
-    _summaries = {}
-    _seq = 0
-
-
-# ------------------------------------------------------------------ #
-# Helpers
-# ------------------------------------------------------------------ #
 
 def _today_str() -> str:
     return time.strftime("%Y-%m-%d", time.localtime())
@@ -201,6 +158,14 @@ def _ocr_photo(photo_bytes: bytes) -> str:
 # Core entry operations
 # ------------------------------------------------------------------ #
 
+"""LOG module — SQLite storage layer (Sprint 18 replacement for in-memory dicts)."""
+import json, time
+from typing import Optional
+from server.db import get_db, reset_tables
+
+
+# ── CRUD ──────────────────────────────────────────────────────────────────
+
 def entry_new(
     kind: str,
     body: str,
@@ -217,69 +182,77 @@ def entry_new(
     ref_id: Optional[int] = None,
     tags: Optional[list] = None,
 ) -> int:
-    global _seq
     if kind not in KINDS and source != "auto":
         kind = "note"
     if at is None:
         at = time.time()
     photo_text = _ocr_photo(photo_bytes) if photo_bytes else None
-    auto_tags = tags if tags is not None else _infer_tags(kind, body)
-    _seq += 1
-    _entries[_seq] = LogEntry(
-        id=_seq, kind=kind, body=body, tags=auto_tags, at=at,
-        source=source, lat=lat, lon=lon, weather_json=weather_json,
-        mood=mood, energy=energy, photo_text=photo_text,
-        ref_table=ref_table, ref_id=ref_id,
-    )
-    return _seq
+    auto_tags  = tags if tags is not None else _infer_tags(kind, body)
+    db = get_db()
+    cur = db.execute(
+        """INSERT INTO log_entry
+               (kind, body, tags, at, lat, lon, weather, author,
+                mood, energy, ref_table, ref_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (kind, body, json.dumps(auto_tags), at, lat, lon,
+         json.dumps(weather_json) if weather_json else None, source,
+         mood, energy, ref_table, ref_id))
+    db.commit()
+    return cur.lastrowid
 
 
 def entry_fetch(eid: int) -> Optional[dict]:
-    e = _entries.get(eid)
-    return _entry_dict(e) if e else None
+    row = get_db().execute(
+        "SELECT * FROM log_entry WHERE id=?", (eid,)).fetchone()
+    return _row_to_dict(row) if row else None
 
 
 def entry_update(eid: int, **fields) -> bool:
-    e = _entries.get(eid)
-    if not e:
-        return False
     allowed = {"kind", "body", "tags", "mood", "energy"}
-    for k, v in fields.items():
-        if k in allowed:
-            setattr(e, k, v)
-    return True
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return False
+    db = get_db()
+    if "tags" in updates and isinstance(updates["tags"], list):
+        updates["tags"] = json.dumps(updates["tags"])
+    sets = ", ".join(f"{k}=?" for k in updates)
+    cur = db.execute(f"UPDATE log_entry SET {sets} WHERE id=?",
+                     (*updates.values(), eid))
+    db.commit()
+    return cur.rowcount > 0
 
 
 def entry_delete(eid: int) -> bool:
-    if eid not in _entries:
-        return False
-    del _entries[eid]
-    return True
+    db = get_db()
+    cur = db.execute("DELETE FROM log_entry WHERE id=?", (eid,))
+    db.commit()
+    return cur.rowcount > 0
 
 
-def _entry_dict(e: LogEntry) -> dict:
+def _row_to_dict(row) -> dict:
+    tags = json.loads(row["tags"]) if row["tags"] else []
+    weather = json.loads(row["weather"]) if row["weather"] else None
+    at = row["at"]
     return {
-        "id": e.id, "kind": e.kind, "body": e.body, "tags": e.tags,
-        "at": e.at, "source": e.source,
-        "lat": e.lat, "lon": e.lon,
-        "weather": e.weather_json, "mood": e.mood, "energy": e.energy,
-        "photo_text": e.photo_text,
-        "ref_table": e.ref_table, "ref_id": e.ref_id,
-        "date": _date_str(e.at),
-        "time": time.strftime("%H:%M", time.localtime(e.at)),
+        "id": row["id"], "kind": row["kind"], "body": row["body"],
+        "tags": tags, "at": at, "source": row["author"] or "user",
+        "lat": row["lat"], "lon": row["lon"], "weather": weather,
+        "mood": row["mood"], "energy": row["energy"], "photo_text": None,
+        "ref_table": row["ref_table"], "ref_id": row["ref_id"],
+        "date": _date_str(at),
+        "time": time.strftime("%H:%M", time.localtime(at)),
     }
 
 
-# ------------------------------------------------------------------ #
-# Queries
-# ------------------------------------------------------------------ #
+# ── Queries ───────────────────────────────────────────────────────────────
 
 def entries_today() -> list[dict]:
     today = _today_str()
-    return [
-        _entry_dict(e) for e in sorted(_entries.values(), key=lambda x: x.at)
-        if _date_str(e.at) == today
-    ]
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM log_entry WHERE date(at,'unixepoch','localtime')=? "
+        "ORDER BY at ASC", (today,)).fetchall()
+    return [_row_to_dict(r) for r in rows]
 
 
 def entries_query(
@@ -289,83 +262,89 @@ def entries_query(
     kind: Optional[str] = None,
     q: Optional[str] = None,
 ) -> list[dict]:
-    results = list(_entries.values())
-
+    clauses, params = [], []
     if date_from:
-        ts_from = time.mktime(time.strptime(date_from, "%Y-%m-%d"))
-        results = [e for e in results if e.at >= ts_from]
+        clauses.append("at >= ?")
+        params.append(time.mktime(time.strptime(date_from, "%Y-%m-%d")))
     if date_to:
-        ts_to = time.mktime(time.strptime(date_to, "%Y-%m-%d")) + 86400
-        results = [e for e in results if e.at < ts_to]
+        clauses.append("at < ?")
+        params.append(time.mktime(time.strptime(date_to, "%Y-%m-%d")) + 86400)
     if kind:
-        results = [e for e in results if e.kind == kind]
+        # Support exact match or prefix match (e.g. "auspice.sabbat")
+        if "." in kind:
+            clauses.append("kind=?"); params.append(kind)
+        else:
+            clauses.append("(kind=? OR kind LIKE ?)"); params += [kind, f"{kind}.%"]
     if q:
-        ql = q.lower()
-        results = [
-            e for e in results
-            if ql in e.body.lower() or any(ql in t for t in e.tags)
-        ]
+        clauses.append("(body LIKE ? OR tags LIKE ?)")
+        params += [f"%{q}%", f"%{q}%"]
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    rows = get_db().execute(
+        f"SELECT * FROM log_entry {where} ORDER BY at DESC", params).fetchall()
+    return [_row_to_dict(r) for r in rows]
 
-    return [_entry_dict(e) for e in sorted(results, key=lambda x: x.at, reverse=True)]
-
-
-# ------------------------------------------------------------------ #
-# Auto-event hook (called by MEDICAL, COMMS, POWER, NAVIGATION)
-# ------------------------------------------------------------------ #
 
 def register_auto_event(
-    kind: str,
-    body: str,
-    ref_table: Optional[str] = None,
-    ref_id: Optional[int] = None,
-    **kwargs,
+    kind: str, body: str,
+    ref_table: Optional[str] = None, ref_id: Optional[int] = None, **kwargs,
 ) -> int:
-    """Called by other modules to inject auto-log entries."""
-    return entry_new(
-        kind=kind, body=body, source="auto",
-        ref_table=ref_table, ref_id=ref_id, **kwargs,
-    )
+    return entry_new(kind=kind, body=body, source="auto",
+                     ref_table=ref_table, ref_id=ref_id, **kwargs)
 
 
-# ------------------------------------------------------------------ #
-# Daily summary
-# ------------------------------------------------------------------ #
+# ── Daily summary ─────────────────────────────────────────────────────────
 
 def summary_get(date: Optional[str] = None) -> Optional[dict]:
     d = date or _today_str()
-    s = _summaries.get(d)
-    if s:
-        return {"date": d, "text": s.summary_text, "approved_at": s.approved_at}
-    # Auto-generate if not yet produced
-    day_entries = [
-        e for e in _entries.values() if _date_str(e.at) == d
-    ]
-    if not day_entries and d == _today_str():
+    db = get_db()
+    row = db.execute("SELECT * FROM daily_summary WHERE date_str=?", (d,)).fetchone()
+    if row:
+        return {"date": d, "day_number": row["day_number"],
+                "text": row["body"], "approved_at": row["approved_at"]}
+    day_entries_rows = db.execute(
+        "SELECT * FROM log_entry WHERE date(at,'unixepoch','localtime')=?", (d,)).fetchall()
+    if not day_entries_rows and d == _today_str():
         return None
-    text = _generate_summary(day_entries)
-    _summaries[d] = DailySummary(date=d, summary_text=text)
-    return {"date": d, "text": text, "approved_at": None}
+    # Build synthetic entry objects for the summary generator
+    class _E:
+        pass
+    entries = []
+    for r in day_entries_rows:
+        e = _E()
+        e.id = r["id"]; e.kind = r["kind"]; e.body = r["body"]
+        e.tags = json.loads(r["tags"]) if r["tags"] else []
+        e.at = r["at"]; e.lat = r["lat"]; e.lon = r["lon"]
+        e.source = r["author"] or "user"
+        e.weather_json = json.loads(r["weather"]) if r["weather"] else None
+        e.mood = None; e.energy = None; e.photo_text = None
+        e.ref_table = None; e.ref_id = None
+        entries.append(e)
+    text = _generate_summary(entries)
+    day_n = _day_number(time.mktime(time.strptime(d, "%Y-%m-%d")))
+    db.execute(
+        "INSERT OR REPLACE INTO daily_summary(date_str,day_number,body,approved) "
+        "VALUES(?,?,?,0)", (d, day_n, text))
+    db.commit()
+    return {"date": d, "day_number": day_n, "text": text, "approved_at": None}
 
 
 def summary_approve(date: Optional[str] = None) -> bool:
     d = date or _today_str()
-    if d not in _summaries:
-        summary_get(d)          # ensure it exists
-    if d not in _summaries:
-        return False
-    _summaries[d].approved_at = time.time()
-    return True
+    summary_get(d)   # ensure row exists
+    db = get_db()
+    cur = db.execute(
+        "UPDATE daily_summary SET approved=1, approved_at=strftime('%s','now') "
+        "WHERE date_str=?", (d,))
+    db.commit()
+    return cur.rowcount > 0
 
 
-# ------------------------------------------------------------------ #
-# Export
-# ------------------------------------------------------------------ #
+# ── Export ────────────────────────────────────────────────────────────────
 
 def export_markdown(date_from: str, date_to: str) -> str:
     rows = entries_query(date_from=date_from, date_to=date_to)
     if not rows:
         return f"# OVERSEER LOG — {date_from} to {date_to}\n\nNo entries.\n"
-
     lines = [f"# OVERSEER LOG — {date_from} to {date_to}\n"]
     cur_date = None
     for e in sorted(rows, key=lambda x: x["at"]):
@@ -380,10 +359,10 @@ def export_markdown(date_from: str, date_to: str) -> str:
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ #
-# Flask routes
-# ------------------------------------------------------------------ #
+# ── Reset ─────────────────────────────────────────────────────────────────
 
+def reset_for_tests() -> None:
+    reset_tables("log_entry", "daily_summary")
 def register(app) -> None:
     from flask import jsonify, request
 
@@ -457,3 +436,8 @@ def register(app) -> None:
     @app.get("/api/l/kinds")
     def l_kinds():
         return jsonify(list(KINDS))
+
+# ── end of module ─────────────────────────────────────────────────────────
+
+# -- end of module - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
