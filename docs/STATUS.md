@@ -1,15 +1,15 @@
 # OVERSEER v3 — status board
 
-**Last updated:** end of Sprint 19, Cowork session.
+**Last updated:** end of Sprint 20, Cowork session.
 
 ---
 
 ## TL;DR
 
   - Branch `v3-redesign` is **all local**.
-  - Sprints **0–19 done**; Sprint 20+ (polish, hardware, COMMS SQLite) is the next gate.
+  - Sprints **0–20 done**; Sprint 21+ (real hardware, Cardputer, push) is next.
   - Push when convenient: `git push -u origin v3-redesign`
-  - All gates passing: **333 Python tests + 121 jsdom smoke**, no failures.
+  - All gates passing: **354 Python tests + 121 jsdom smoke**, no failures.
   - Bundle ~139 KB minified JS + ~52 KB minified CSS.
 
 ---
@@ -48,14 +48,15 @@ git push -u origin v3-redesign
 | 17     | SYSTEM + HELP                          | done     | ✓ |
 | 18     | SQLite persistence foundation          | done     | ✓ |
 | 19     | TRADER (TradeWars-lite barter game)    | done     | ✓ |
-| 20+    | Polish, COMMS SQLite, hardware         | pending  | — |
+| 20     | Polish: COMMS SQLite + hardware layer  | done     | ✓ |
+| 21+    | Real hardware, Cardputer, push         | pending  | — |
 
 ---
 
-## Gate evidence at end of Sprint 19
+## Gate evidence at end of Sprint 20
 
 ```
-$ pytest tests/unit/         -> 333 passed (0 failed)
+$ pytest tests/unit/         -> 354 passed (0 failed)
 $ node tools/smoke-shell.mjs -> 121 PASS, 0 FAIL
 
 Bundle: shell/public/dist/main.{js,css}
@@ -63,42 +64,53 @@ Bundle: shell/public/dist/main.{js,css}
   main.css  52 KB minified
 ```
 
-Test breakdown (333 total):
-  - 308 carried (Sprints 0-18 baseline)
-  - +25  (test_trader.py Sprint 19: engine/sectors/trade/routes)
+Test breakdown (354 total):
+  - 333 carried (Sprints 0-19 baseline)
+  - +12  (test_comms.py: 3 new persistence tests; 9 existing passing)
+  - +18  (test_hw.py Sprint 20: defaults/env-overrides/hw_info)
 
-Smoke breakdown (121 total):
-  - 118 carried (Sprints 0-18 baseline)
-  - +3   (TRADER: sub-screen mount, history panel, command input)
+Smoke unchanged at 121 (no new shell sub-screens this sprint).
 
 ---
 
-## Sprint 19 deliverables (TRADER)
+## Sprint 20 deliverables (Polish: COMMS SQLite + hardware layer)
 
-`server/modules/recreation.py` (extended to 1011 lines):
-  - `TraderState` dataclass: sector, credits, cargo dict, turns, history, prices, done/won
-  - 6 sectors: homestead, market_town, farmstead, fuel_depot, medical_station, bunker
-  - 6 commodities: food, water, fuel, medicine, ammo, tools
-  - Comparative advantage: each sector has cheap/expensive commodities to reward cross-trading
-  - Per-session randomised prices (±25% variance, seeded by session ID for reproducibility)
-  - 200 credits / 20 cargo slots / 30 turns at start
-  - Commands: go <sector>, buy <item> <qty>, sell <item> <qty>, status, prices, help
-  - `trader_new(session)` + `trader_cmd(session, cmd)` public API
-  - 2 new REST routes: POST /api/r/trader/start, POST /api/r/trader/<s>/cmd
-  - Game registry: trader status updated from "coming Sprint 16" → "available"
+`server/migrations/015_comms.sql`:
+  - `comms_operator` — callsign registry
+  - `comms_message` — message rows with serialised envelope JSON
+  - `comms_board_post` — board posts with body + metadata
 
-`shell/src/modules/recreation.js` (extended, now 8 sub-screens):
-  - T(trader): barter terminal, scrolling history, command input, session restart on done
+`server/modules/comms.py` (hybrid SQLite migration):
+  - `register_operator()` writes to `comms_operator`
+  - `send_message()` writes envelope via `to_wire()` to `comms_message`
+  - `mark_read()` updates `state` column in `comms_message`
+  - `post_to_board()` writes to `comms_board_post`
+  - `reset_for_tests()` calls `reset_tables(...)` + clears in-memory dicts
+  - `_messages` dict stays as in-memory cache (crypto objects can't go in DB)
+  - All 9 existing comms tests pass unchanged
 
-25 new tests in `tests/unit/test_trader.py`:
-  - TestTraderEngine (21): new session, starting state, go adjacent/non-adjacent, buy/sell,
-    cross-sector profit, unknown commodity, insufficient credits, cargo limit, sell overage,
-    help, status, unknown session, game registry available
-  - TestTraderRoutes (4): start/cmd routes, buy via route, missing-session 404
+`server/hw.py` (new):
+  - `sdr_backend()` — OVERSEER_SDR env var → rtlsdr / hackrf / airspy / synthetic
+  - `lora_backend()` — OVERSEER_LORA → sx1262 / sx1278 / rylr998 / synthetic
+  - `mesh_backend()` — OVERSEER_MESH → meshtastic / hamlib / synthetic
+  - `gps_backend()` — OVERSEER_GPS → gpsd / serial / synthetic
+  - `power_backend()` — OVERSEER_POWER → ina226 / shunt / synthetic
+  - `display_backend()` — OVERSEER_DISPLAY → epaper / hdmi / headless
+  - `hw_info()` — snapshot dict of all backends
+  - `any_real_hardware()` — True if any non-synthetic backend active
+  - Unknown env values fall back to default with a warning
 
-`tools/smoke-shell.mjs`:
-  - Tab count updated 7 → 8 (FWGCZRDT)
-  - 3 new TRADER assertions: sub-screen mount, history panel, command input
+`tests/unit/test_comms.py` (extended to 12 tests):
+  - +3 persistence tests: message_written_to_db, mark_read_updates_db,
+    board_post_written_to_db
+
+`tests/unit/test_hw.py` (new, 18 tests):
+  - TestDefaults (6): all defaults correct
+  - TestEnvOverrides (8): each backend, unknown value warning, case-insensitive
+  - TestHwInfo (4): all keys, defaults, any_real_hardware false/true
+
+`.gitignore`:
+  - Added `.fuse_hidden*` (Linux FUSE mount artefacts)
 
 ---
 
@@ -112,9 +124,9 @@ All in `docs/architecture-decisions/`. See Sprint 8 STATUS for full table.
 
 - Brotli dict ctypes shim (ADR-0010)
 - JS-side Brotli v0x02 (wait on browser support)
-- Real hardware backends — env flags ready (OVERSEER_SIGNAL_SDR=rtlsdr etc.)
 - COMMS forward secrecy — python-doubleratchet (ADR-0012)
-- COMMS SQLite migration (Sprint 20+) — crypto objects deferred
-- Cardputer firmware
+- COMMS `_messages` in-memory cache — crypto objects require live ratchet state
+- Real hardware backends — env flags in `server/hw.py`, stubs ready to swap in
+- Cardputer firmware (Ted writes this against the OPi5 backend)
 - `.git/` cruft + `.trash_local/` cleanup
 
