@@ -258,7 +258,7 @@ def reader_list_progress() -> list[dict]:
 # ── game registry ──────────────────────────────────────────────────────────
 _GAMES = [
     {"id": "dragon",  "name": "Dragon's Tale",  "status": "available",        "hotkey": "D"},
-    {"id": "trader",  "name": "Trader",          "status": "coming Sprint 16", "hotkey": "T"},
+    {"id": "trader",  "name": "Trader",          "status": "available",        "hotkey": "T"},
     {"id": "chess",   "name": "Chess",           "status": "available",        "hotkey": "C"},
     {"id": "zork",    "name": "Bunker Adventure","status": "available",        "hotkey": "Z"},
     {"id": "wiki",    "name": "Wiki Roulette",   "status": "available",        "hotkey": "W"},
@@ -274,7 +274,7 @@ def fortune_get() -> dict:
 
 def reset_for_tests():
     global _reading, _chess, _zork, _dragon, _seq
-    _reading = {}; _chess = {}; _zork = {}; _dragon = {}; _seq = 0
+    _reading = {}; _chess = {}; _zork = {}; _dragon = {}; _trader = {}; _seq = 0
 
 # ── Dragon's Tale text adventure ──────────────────────────────────────────────
 # Fantasy text adventure as recreational escapism. 10 rooms, combat,
@@ -296,6 +296,7 @@ class DragonState:
     flags:   set       # progression flags (using list for JSON compat)
 
 _dragon: dict = {}   # session -> DragonState
+_trader: dict = {}   # session -> TraderState
 
 _DR_ROOMS = {
     "village_square": {
@@ -657,6 +658,269 @@ _DR_ROOMS_ORIG = {rk: {"items": list(rv.get("items", []))}
 
 
 # ── Flask routes ───────────────────────────────────────────────────────────
+
+# TRADER engine block — appended to recreation.py
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TRADER  —  TradeWars-lite barter economy (Sprint 19)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Sectors and their base prices (synthetic post-collapse economy).
+# Each sector has comparative advantage so cross-trading is always profitable.
+_TR_SECTORS = {
+    "homestead": {
+        "desc": "Your fortified homestead. Safe harbour, poor selection.",
+        "prices": {"food":  8, "water":  5, "fuel": 18, "medicine": 25, "ammo": 20, "tools": 15},
+        "exits": ["market_town", "farmstead"],
+    },
+    "market_town": {
+        "desc": "A busy trading post. Wide selection, average prices.",
+        "prices": {"food": 10, "water":  7, "fuel": 15, "medicine": 22, "ammo": 18, "tools": 12},
+        "exits": ["homestead", "fuel_depot", "medical_station"],
+    },
+    "farmstead": {
+        "desc": "Farming collective. Cheap food and water, little else.",
+        "prices": {"food":  4, "water":  3, "fuel": 20, "medicine": 30, "ammo": 25, "tools": 18},
+        "exits": ["homestead", "bunker"],
+    },
+    "fuel_depot": {
+        "desc": "Salvage operation. Fuel is cheapest here.",
+        "prices": {"food": 14, "water": 10, "fuel":  8, "medicine": 28, "ammo": 22, "tools": 14},
+        "exits": ["market_town", "bunker"],
+    },
+    "medical_station": {
+        "desc": "Field hospital. Medicine at cost; everything else scarce.",
+        "prices": {"food": 16, "water":  8, "fuel": 22, "medicine": 12, "ammo": 30, "tools": 20},
+        "exits": ["market_town", "bunker"],
+    },
+    "bunker": {
+        "desc": "Fortified bunker community. Ammo and tools cheap; food costly.",
+        "prices": {"food": 20, "water": 12, "fuel": 16, "medicine": 24, "ammo":  9, "tools":  8},
+        "exits": ["farmstead", "fuel_depot", "medical_station"],
+    },
+}
+
+_TR_COMMODITIES = ["food", "water", "fuel", "medicine", "ammo", "tools"]
+_TR_CARGO_MAX   = 20   # total units across all commodities
+_TR_TURNS_START = 30
+_TR_CREDITS_START = 200
+_TR_PRICE_VARIANCE = 0.25   # ±25% per-session random variation
+
+@dataclass
+class TraderState:
+    sector:  str
+    credits: int
+    cargo:   dict        # commodity -> qty
+    turns:   int
+    history: list
+    prices:  dict        # sector -> commodity -> price (randomised at game start)
+    done:    bool = False
+    won:     bool = False
+
+_trader: dict = {}   # session -> TraderState
+
+
+def _tr_randomise_prices(rng) -> dict:
+    """Build per-session price table with ±25% variance from base."""
+    out = {}
+    for sec, data in _TR_SECTORS.items():
+        out[sec] = {}
+        for com, base in data["prices"].items():
+            lo = max(1, int(base * (1 - _TR_PRICE_VARIANCE)))
+            hi = max(lo + 1, int(base * (1 + _TR_PRICE_VARIANCE)) + 1)
+            out[sec][com] = rng.randint(lo, hi)
+    return out
+
+
+def _tr_cargo_total(state: TraderState) -> int:
+    return sum(state.cargo.values())
+
+
+def _tr_net_worth(state: TraderState) -> int:
+    """Credits + cargo valued at current-sector prices."""
+    sec_prices = state.prices[state.sector]
+    return state.credits + sum(
+        qty * sec_prices.get(com, 0) for com, qty in state.cargo.items()
+    )
+
+
+def _tr_price_table(state: TraderState) -> str:
+    """ASCII price table for current sector."""
+    rows = [f"  {'COMMODITY':<12} {'BUY':>5} {'SELL':>5}",
+            "  " + "-" * 26]
+    p = state.prices[state.sector]
+    for com in _TR_COMMODITIES:
+        price = p[com]
+        sell  = max(1, price - 1)   # sell slightly below buy
+        rows.append(f"  {com:<12} {price:>5} {sell:>5}")
+    return "\n".join(rows)
+
+
+def _tr_status(state: TraderState) -> str:
+    sec  = _TR_SECTORS[state.sector]
+    cargo_str = ", ".join(f"{q}x{c}" for c, q in state.cargo.items() if q > 0) or "empty"
+    exits = ", ".join(sec["exits"])
+    return (
+        f"SECTOR: {state.sector.replace('_',' ').upper()}\n"
+        f"{sec['desc']}\n\n"
+        f"Credits: {state.credits}  |  Cargo: {_tr_cargo_total(state)}/{_TR_CARGO_MAX}"
+        f"  |  Turns: {state.turns}\n"
+        f"Cargo hold: {cargo_str}\n"
+        f"Exits: {exits}\n\n"
+        f"PRICES (buy / sell):\n{_tr_price_table(state)}"
+    )
+
+
+def _tr_cmd(state: TraderState, raw: str) -> str:
+    if state.done:
+        return "Game over. Start a new session to trade again."
+
+    parts = raw.strip().lower().split()
+    if not parts:
+        return "Commands: go <sector>, buy <item> <qty>, sell <item> <qty>, status, prices, help"
+
+    cmd = parts[0]
+
+    # ── status / look ────────────────────────────────────────────────
+    if cmd in ("status", "look", "l"):
+        return _tr_status(state)
+
+    # ── prices ───────────────────────────────────────────────────────
+    if cmd in ("prices", "p"):
+        return _tr_price_table(state)
+
+    # ── help ─────────────────────────────────────────────────────────
+    if cmd == "help":
+        return (
+            "TRADER — post-collapse barter sim\n\n"
+            "  go <sector>       Travel to adjacent sector (costs 1 turn)\n"
+            "  buy <item> <qty>  Buy commodities at current sector price\n"
+            "  sell <item> <qty> Sell commodities (receive sell price)\n"
+            "  status            Show current position and prices\n"
+            "  prices            Show price table for this sector\n"
+            "  help              This message\n\n"
+            f"Sectors: {', '.join(_TR_SECTORS.keys())}\n"
+            f"Commodities: {', '.join(_TR_COMMODITIES)}"
+        )
+
+    # ── go ───────────────────────────────────────────────────────────
+    if cmd == "go":
+        if len(parts) < 2:
+            return "Go where? Specify a sector name."
+        dest = "_".join(parts[1:])
+        exits = _TR_SECTORS[state.sector]["exits"]
+        if dest not in exits:
+            return f"Can't reach {dest} from here. Exits: {', '.join(exits)}"
+        state.sector = dest
+        state.turns -= 1
+        if state.turns <= 0:
+            state.done = True
+            nw = _tr_net_worth(state)
+            state.won = nw > _TR_CREDITS_START
+            return (
+                f"You arrive at {dest.replace('_',' ').upper()}.\n"
+                f"[GAME OVER — out of turns]\n"
+                f"Final net worth: {nw} credits "
+                f"({'profit!' if state.won else 'loss'} vs {_TR_CREDITS_START} start)"
+            )
+        return f"You travel to {dest.replace('_',' ').upper()}. Turns left: {state.turns}\n\n" + _tr_status(state)
+
+    # ── buy ──────────────────────────────────────────────────────────
+    if cmd == "buy":
+        if len(parts) < 3:
+            return "Usage: buy <item> <qty>"
+        com = parts[1]
+        if com not in _TR_COMMODITIES:
+            return f"Unknown commodity: {com}. Options: {', '.join(_TR_COMMODITIES)}"
+        try:
+            qty = int(parts[2])
+        except ValueError:
+            return "Quantity must be a number."
+        if qty <= 0:
+            return "Quantity must be positive."
+        free = _TR_CARGO_MAX - _tr_cargo_total(state)
+        if qty > free:
+            return f"Not enough cargo space. Free: {free} units."
+        price = state.prices[state.sector][com]
+        cost  = price * qty
+        if cost > state.credits:
+            return f"Not enough credits. Need {cost}, have {state.credits}."
+        state.credits -= cost
+        state.cargo[com] = state.cargo.get(com, 0) + qty
+        return f"Bought {qty}x {com} @ {price} each. Cost: {cost}. Credits: {state.credits}."
+
+    # ── sell ─────────────────────────────────────────────────────────
+    if cmd == "sell":
+        if len(parts) < 3:
+            return "Usage: sell <item> <qty>"
+        com = parts[1]
+        if com not in _TR_COMMODITIES:
+            return f"Unknown commodity: {com}. Options: {', '.join(_TR_COMMODITIES)}"
+        try:
+            qty = int(parts[2])
+        except ValueError:
+            return "Quantity must be a number."
+        if qty <= 0:
+            return "Quantity must be positive."
+        have = state.cargo.get(com, 0)
+        if qty > have:
+            return f"You only have {have}x {com}."
+        sell_price = max(1, state.prices[state.sector][com] - 1)
+        earned = sell_price * qty
+        state.cargo[com] -= qty
+        state.credits += earned
+        return f"Sold {qty}x {com} @ {sell_price} each. Earned: {earned}. Credits: {state.credits}."
+
+    return f"Unknown command: {cmd}. Type 'help' for commands."
+
+
+def trader_new(session: str) -> dict:
+    import random as _r
+    rng = _r.Random(session)   # deterministic per session-id
+    prices = _tr_randomise_prices(rng)
+    state  = TraderState(
+        sector  = "homestead",
+        credits = _TR_CREDITS_START,
+        cargo   = {c: 0 for c in _TR_COMMODITIES},
+        turns   = _TR_TURNS_START,
+        history = [],
+        prices  = prices,
+    )
+    _trader[session] = state
+    intro = (
+        "Welcome to TRADER — post-collapse barter economy.\n\n"
+        + _tr_status(state)
+        + "\n\nType 'help' for commands."
+    )
+    state.history.append(("start", intro))
+    return {
+        "session": session,
+        "response": intro,
+        "sector":  state.sector,
+        "credits": state.credits,
+        "cargo":   dict(state.cargo),
+        "turns":   state.turns,
+        "done":    state.done,
+        "synthetic": True,
+    }
+
+
+def trader_cmd(session: str, cmd: str) -> dict:
+    state = _trader.get(session)
+    if state is None:
+        return {"error": "session not found"}
+    resp = _tr_cmd(state, cmd)
+    state.history.append((cmd, resp))
+    return {
+        "session": session,
+        "response": resp,
+        "sector":  state.sector,
+        "credits": state.credits,
+        "cargo":   dict(state.cargo),
+        "turns":   state.turns,
+        "done":    state.done,
+    }
+
 def register(app):
     from flask import jsonify, request, session
 
@@ -730,3 +994,17 @@ def register(app):
         state.history.append((cmd, resp))
         return jsonify({"response": resp, "room": state.room,
                         "inv": state.inv, "done": state.done})
+
+    @app.route("/api/r/trader/start", methods=["POST"])
+    def _trader_start():
+        sid = (request.json or {}).get("session", f"t{int(time.time())}")
+        return jsonify(trader_new(sid))
+
+    @app.route("/api/r/trader/<session>/cmd", methods=["POST"])
+    def _trader_cmd_route(session):
+        cmd = (request.json or {}).get("cmd", "")
+        r = trader_cmd(session, cmd)
+        return (jsonify(r), 404) if "error" in r else jsonify(r)
+
+# -- end of module - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+

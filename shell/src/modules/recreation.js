@@ -12,7 +12,7 @@
 
 import { el } from "../chrome/_dom.js";
 
-const SUBS = { F:"fortune", W:"wiki", G:"games", C:"chess", Z:"zork", R:"reader", D:"dragon" };
+const SUBS = { F:"fortune", W:"wiki", G:"games", C:"chess", Z:"zork", R:"reader", D:"dragon", T:"trader" };
 
 const local = {
   sub: "fortune",
@@ -34,6 +34,11 @@ const local = {
   dragonHistory: [],
   dragonDone: false,
   dragonWon: false,
+  // trader
+  traderSession: null,
+  traderHistory: [],
+  traderInput: "",
+  traderDone: false,
 };
 
 export function mountRecreation(root, store, ctx) {
@@ -44,8 +49,8 @@ export function mountRecreation(root, store, ctx) {
   screen.append(tabs, body);
 
   function paint() {
-    const labels = ["fortune","wiki","games","chess","zork","reader","dragon"];
-    const keys   = "FWGCZRD";
+    const labels = ["fortune","wiki","games","chess","zork","reader","dragon","trader"];
+    const keys   = "FWGCZRDT";
     tabs.replaceChildren(...labels.map((s, i) => {
       const t = el("span", "kb-tab" + (local.sub === s ? " active" : ""));
       t.append(el("span", "k", keys[i]), el("span", "l", s));
@@ -61,6 +66,7 @@ export function mountRecreation(root, store, ctx) {
       case "zork":    paintZork(body);    break;
       case "reader":  paintReader(body);  break;
       case "dragon":  paintDragon(body); break;
+      case "trader":  paintTrader(body); break;
     }
   }
 
@@ -391,6 +397,80 @@ export function mountRecreation(root, store, ctx) {
       c.append(restart);
     }
   }
+
+  // ── TRADER ───────────────────────────────────────────────────────────────
+  function paintTrader(c) {
+    const hdr = el("div", "rec-hdr");
+    hdr.append(el("div", "rec-title", "TRADER"));
+    hdr.append(el("div", "rec-sub", "post-collapse barter economy"));
+    c.append(hdr);
+
+    if (!local.traderSession) {
+      local.traderSession = "tr" + Date.now();
+      fetch("/api/r/trader/start", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({session: local.traderSession})
+      })
+        .then(r => r.json())
+        .then(d => {
+          local.traderHistory = [d.response];
+          local.traderDone = d.done;
+          paint();
+        });
+      c.append(el("div", "rec-loading", "Starting trade session..."));
+      return;
+    }
+
+    const wrap = el("div", "trader-wrap");
+    c.append(wrap);
+
+    const hist = el("div", "trader-hist");
+    local.traderHistory.forEach(line => {
+      const p = el("div", "trader-line");
+      p.textContent = line;
+      hist.append(p);
+    });
+    wrap.append(hist);
+    hist.scrollTop = hist.scrollHeight;
+
+    if (!local.traderDone) {
+      const row = el("div", "trader-row");
+      const prompt = el("span", "trader-prompt", "> ");
+      const inp = el("input", "trader-input");
+      inp.type = "text";
+      inp.value = local.traderInput;
+      inp.placeholder = "go <sector> | buy <item> <qty> | sell <item> <qty> | help";
+      inp.addEventListener("input",  e => { local.traderInput = e.target.value; });
+      inp.addEventListener("keydown", e => {
+        if (e.key !== "Enter") return;
+        const cmd = local.traderInput.trim();
+        if (!cmd) return;
+        local.traderInput = "";
+        fetch("/api/r/trader/" + local.traderSession + "/cmd", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({cmd})
+        })
+          .then(r => r.json())
+          .then(d => {
+            local.traderHistory.push("> " + cmd);
+            local.traderHistory.push(d.response);
+            local.traderDone = d.done;
+            paint();
+          });
+      });
+      row.append(prompt, inp);
+      wrap.append(row);
+      setTimeout(() => inp.focus(), 0);
+    } else {
+      const done = el("div", "trader-done", "[Session complete — press T to restart]");
+      done.addEventListener("click", () => {
+        local.traderSession = null; local.traderHistory = []; local.traderDone = false; paint();
+      });
+      wrap.append(done);
+    }
+  }
   // ── keyboard ──────────────────────────────────────────────────────────────
   function onKey(e) {
     const k = e.key.toUpperCase();
@@ -404,3 +484,5 @@ export function mountRecreation(root, store, ctx) {
 
   return () => screen.removeEventListener("keydown", onKey);
 }
+
+// -- end of module

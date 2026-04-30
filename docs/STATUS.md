@@ -1,16 +1,16 @@
 # OVERSEER v3 — status board
 
-**Last updated:** end of Sprint 18, Cowork session.
+**Last updated:** end of Sprint 19, Cowork session.
 
 ---
 
 ## TL;DR
 
   - Branch `v3-redesign` is **all local**.
-  - Sprints **0–18 done**; Sprint 19+ (TRADER module, polish, hardware) is the next gate.
+  - Sprints **0–19 done**; Sprint 20+ (polish, hardware, COMMS SQLite) is the next gate.
   - Push when convenient: `git push -u origin v3-redesign`
-  - All gates passing: **308 Python tests + 143 jsdom smoke**, no failures.
-  - Bundle ~137 KB minified JS + ~52 KB minified CSS.
+  - All gates passing: **333 Python tests + 121 jsdom smoke**, no failures.
+  - Bundle ~139 KB minified JS + ~52 KB minified CSS.
 
 ---
 
@@ -47,71 +47,58 @@ git push -u origin v3-redesign
 | 16     | RECREATION: Dragon's Tale              | done     | ✓ |
 | 17     | SYSTEM + HELP                          | done     | ✓ |
 | 18     | SQLite persistence foundation          | done     | ✓ |
-| 19+    | TRADER, polish, hardware               | pending  | — |
+| 19     | TRADER (TradeWars-lite barter game)    | done     | ✓ |
+| 20+    | Polish, COMMS SQLite, hardware         | pending  | — |
 
 ---
 
-## Gate evidence at end of Sprint 18
+## Gate evidence at end of Sprint 19
 
 ```
-$ pytest tests/unit/         -> 308 passed (0 failed)
-$ node tools/smoke-shell.mjs -> 143 PASS, 0 FAIL
+$ pytest tests/unit/         -> 333 passed (0 failed)
+$ node tools/smoke-shell.mjs -> 121 PASS, 0 FAIL
 
 Bundle: shell/public/dist/main.{js,css}
-  main.js  137 KB minified
+  main.js  139 KB minified
   main.css  52 KB minified
 ```
 
-Test count unchanged at 308 — Sprint 18 is infrastructure only, no new tests.
+Test breakdown (333 total):
+  - 308 carried (Sprints 0-18 baseline)
+  - +25  (test_trader.py Sprint 19: engine/sectors/trade/routes)
+
+Smoke breakdown (121 total):
+  - 118 carried (Sprints 0-18 baseline)
+  - +3   (TRADER: sub-screen mount, history panel, command input)
 
 ---
 
-## Sprint 18 deliverables (SQLite persistence foundation)
+## Sprint 19 deliverables (TRADER)
 
-`server/db.py`:
-  - Thread-local SQLite connections via `get_db()` / `close_db()`
-  - Migration runner: applies `server/migrations/*.sql` in sorted order,
-    stamps applied migrations in `schema_migrations` table
-  - `reset_tables(*names)` helper for test isolation
+`server/modules/recreation.py` (extended to 1011 lines):
+  - `TraderState` dataclass: sector, credits, cargo dict, turns, history, prices, done/won
+  - 6 sectors: homestead, market_town, farmstead, fuel_depot, medical_station, bunker
+  - 6 commodities: food, water, fuel, medicine, ammo, tools
+  - Comparative advantage: each sector has cheap/expensive commodities to reward cross-trading
+  - Per-session randomised prices (±25% variance, seeded by session ID for reproducibility)
+  - 200 credits / 20 cargo slots / 30 turns at start
+  - Commands: go <sector>, buy <item> <qty>, sell <item> <qty>, status, prices, help
+  - `trader_new(session)` + `trader_cmd(session, cmd)` public API
+  - 2 new REST routes: POST /api/r/trader/start, POST /api/r/trader/<s>/cmd
+  - Game registry: trader status updated from "coming Sprint 16" → "available"
 
-`conftest.py`:
-  - Redirects `sqlite3.connect` to a temp dir for tests
-  - Session-scoped `_run_migrations()` fixture (runs once per pytest session)
-  - Per-test `_clear_db_caches()` fixture (closes/reopens thread-local connection)
+`shell/src/modules/recreation.js` (extended, now 8 sub-screens):
+  - T(trader): barter terminal, scrolling history, command input, session restart on done
 
-Modules migrated from in-memory dicts to SQLite:
-  - `server/modules/log.py` — `log_entry`, `daily_summary` tables
-  - `server/modules/navigation.py` — `waypoints`, `map_overlay` tables
-  - `server/modules/inventory.py` — `inv_category`, `inv_item`, `inv_event` tables
-  - `server/modules/system_.py` — `users`, `settings`, `backup_job` tables
-  - `server/modules/timeline.py` — adapter queries `log_entry` + `inv_event` via SQL
+25 new tests in `tests/unit/test_trader.py`:
+  - TestTraderEngine (21): new session, starting state, go adjacent/non-adjacent, buy/sell,
+    cross-sector profit, unknown commodity, insufficient credits, cargo limit, sell overage,
+    help, status, unknown session, game registry available
+  - TestTraderRoutes (4): start/cmd routes, buy via route, missing-session 404
 
-Modules deferred (Sprint 21):
-  - `server/modules/comms.py` — crypto envelope objects can't go in DB;
-    tests access internal `_messages[mid].envelope` directly
-
-Migration files (`server/migrations/`):
-  - `008_log_entries.sql` — log_entry + daily_summary; removed CHECK constraint
-    on `kind` (blocked compound kinds like `auspice.sabbat`); added mood,
-    energy, ref_table, ref_id columns
-  - `009_inventory.sql` — inv_category (with parent_id), inv_item, inv_event;
-    ASCII-only icon strings (no emoji)
-
-Schema mapping notes:
-  - `verified bool` ↔ `last_verified_at INTEGER` (NULL = not verified)
-  - `expires_at float` ↔ `expiry_date TEXT` (ISO date YYYY-MM-DD)
-  - `threshold_qty` ↔ `low_threshold`
-  - `acquired_at` ↔ `created_at`
-  - backup fields: `target` ↔ `name`, `path` ↔ `dest`, `at` ↔ `last_run`
-
----
-
-## Gate evidence at end of Sprints 16 + 17
-
-```
-$ pytest tests/unit/         -> 308 passed (0 failed)
-$ node tools/smoke-shell.mjs -> 143 PASS, 0 FAIL
-```
+`tools/smoke-shell.mjs`:
+  - Tab count updated 7 → 8 (FWGCZRDT)
+  - 3 new TRADER assertions: sub-screen mount, history panel, command input
 
 ---
 
@@ -127,8 +114,7 @@ All in `docs/architecture-decisions/`. See Sprint 8 STATUS for full table.
 - JS-side Brotli v0x02 (wait on browser support)
 - Real hardware backends — env flags ready (OVERSEER_SIGNAL_SDR=rtlsdr etc.)
 - COMMS forward secrecy — python-doubleratchet (ADR-0012)
-- COMMS SQLite migration (Sprint 21) — crypto objects deferred
+- COMMS SQLite migration (Sprint 20+) — crypto objects deferred
 - Cardputer firmware
-- TRADER module (planned Sprint 19)
 - `.git/` cruft + `.trash_local/` cleanup
 

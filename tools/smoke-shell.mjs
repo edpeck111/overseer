@@ -311,6 +311,13 @@ window.fetch = async (url, opts) => {
   }
   if (u.includes("/api/r/dragon/") && u.includes("/cmd")) return fakeResp({ response: "You head north to the blacksmith forge.", done: false, won: false, room: "blacksmith_forge", hp: 20, max_hp: 20, inv: [] });
 
+  // TRADER mocks (Sprint 19)
+  if (u.includes("/api/r/trader/start")) {
+    const sid = (await new Response(opts?.body).json()).session || "t-test";
+    return fakeResp({ session: sid, response: "Welcome to TRADER.\n\nSECTOR: HOMESTEAD\nCredits: 200  |  Cargo: 0/20  |  Turns: 30", sector: "homestead", credits: 200, cargo: {food:0,water:0,fuel:0,medicine:0,ammo:0,tools:0}, turns: 30, done: false, synthetic: true });
+  }
+  if (u.includes("/api/r/trader/") && u.includes("/cmd")) return fakeResp({ response: "Bought 3x food @ 4 each. Cost: 12. Credits: 188.", sector: "homestead", credits: 188, cargo: {food:3,water:0,fuel:0,medicine:0,ammo:0,tools:0}, turns: 30, done: false });
+
   // SYSTEM mocks (Sprint 17)
   if (u.includes("/api/x/info"))     return fakeResp({ node:"overseer", os:"Linux 6.1.0", arch:"aarch64", python:"3.10.12", cpu_cores:4, load_1m:0.12, uptime_s:86400, disk:{ total_gb:32.0, free_gb:18.3 }, at:Date.now()/1000 });
   if (u.includes("/api/x/users") && (!opts || opts.method !== "POST" && opts.method !== "DELETE"))
@@ -997,7 +1004,7 @@ if (!rec) fail("RECREATION screen not mounted on R");
 pass("press R then RECREATION screen mounts");
 
 const recTabs = rec.querySelectorAll(".kb-tab");
-if (recTabs.length !== 7) fail(`RECREATION expected 7 tabs, got ${recTabs.length}`);
+if (recTabs.length !== 8) fail(`RECREATION expected 8 tabs, got ${recTabs.length}`);
 pass(`RECREATION has ${recTabs.length} sub-screen tabs`);
 
 // FORTUNE sub-screen (default) - draw a fortune
@@ -1038,8 +1045,8 @@ if (!rec2) fail("RECREATION screen not mounted for dragon test");
 
 // Now 7 tabs (F/W/G/C/Z/R/D)
 const recTabs2 = rec2.querySelectorAll(".kb-tab");
-if (recTabs2.length !== 7) fail(`RECREATION expected 7 tabs (with dragon), got ${recTabs2.length}`);
-pass(`RECREATION has ${recTabs2.length} tabs including dragon`);
+if (recTabs2.length !== 8) fail(`RECREATION expected 8 tabs (with dragon+trader), got ${recTabs2.length}`);
+pass(`RECREATION has ${recTabs2.length} tabs including dragon+trader`);
 
 // Click dragon tab (index 6)
 recTabs2[6].click();
@@ -1058,6 +1065,27 @@ pass("RECREATION DRAGON history panel renders after start");
 const dragonInp = rec2.querySelector(".rec-dragon-inp");
 if (!dragonInp) fail("RECREATION DRAGON command input missing");
 pass("RECREATION DRAGON command input present");
+
+// ---- Sprint 19 TRADER smoke assertions ---------------------------
+// Navigate back to recreation, switch to trader tab (index 7)
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
+await new Promise((r) => setTimeout(r, 30));
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "R" }));
+await new Promise((r) => setTimeout(r, 80));
+const rec3 = document.querySelector(".screen-recreation");
+if (!rec3) fail("RECREATION screen not remounted for TRADER check");
+const recTabs3 = rec3.querySelectorAll(".kb-tab");
+recTabs3[7].click();  // T tab
+await new Promise((r) => setTimeout(r, 150));
+const traderWrap = rec3.querySelector(".trader-wrap");
+if (!traderWrap) fail("RECREATION TRADER wrap not rendered");
+pass("RECREATION TRADER sub-screen mounts");
+const traderHist = rec3.querySelector(".trader-hist");
+if (!traderHist) fail("RECREATION TRADER history panel missing");
+pass("RECREATION TRADER history panel renders");
+const traderInp = rec3.querySelector(".trader-input");
+if (!traderInp) fail("RECREATION TRADER command input missing");
+pass("RECREATION TRADER command input present");
 
 // ---- Sprint 17 SYSTEM smoke assertions ---------------------------
 document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Q" }));
