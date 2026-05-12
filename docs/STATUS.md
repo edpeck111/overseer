@@ -6,24 +6,16 @@
 
 ## TL;DR
 
-  - `origin/v3-redesign` is at the Sprint 20 commit (`a933e4c`).
-    Sprints 21 and 22 are sitting uncommitted in the working tree —
-    push is held until the staged-deletions / untracked-files state
-    is reconciled (see "Repo hygiene" below).
+  - HEAD: `b470ec3 Sprint 21+22 + v3 tree catch-up: real tiles,
+    real hardware, ADR-0014`. `origin/v3-redesign` is still at
+    `a933e4c` (Sprint 20) — push is the only remaining manual step.
   - Sprints **0–22 done**; Sprint 23+ (more real hardware — SDR / LoRa /
-    Mesh / display — plus Cardputer firmware, plus pushing) is next.
-  - Python: **396 passed**, 1 pre-existing failure in
-    `test_sextant.py::test_python_renders_are_stable` (Windows cp1252
-    decoding a UTF-8 fixture; not Sprint-22 fallout, was already
-    failing on the Sprint-20 HEAD).
-  - **Smoke is broken on the dev box** by an npm-tree ESM/CJS
-    incompatibility: `@exodus/bytes@1.15.0` is `"type": "module"` but
-    the resolved `html-encoding-sniffer` (jsdom dep) `require()`s it.
-    Fix is out of Sprint 22 scope; no shell changes this sprint
-    anyway, but the smoke gate needs an `npm install jsdom@latest` (or
-    a pin on `html-encoding-sniffer`) before Sprint 23 work that
-    touches the shell.
-  - Bundle unchanged: ~140 KB minified JS + ~52 KB minified CSS.
+    Mesh / display — plus Cardputer firmware) is next.
+  - All gates green: **397 pytest passed (0 failed), smoke
+    ALL CHECKS PASSED**, no warnings except the expected
+    synthetic-fallback `UserWarning`s in the new hardware tests.
+  - Bundle: ~141 KB minified JS + ~52 KB minified CSS (Sprint 22 GPS
+    poll added ~1 KB).
 
 ---
 
@@ -181,42 +173,29 @@ old POWER_SOURCE-flag tests in `test_power.py` were rewritten in place.
 
 ---
 
-## Repo hygiene — needs Ted's call before Sprint 23
+## Repo hygiene — resolved this session
 
-The working tree has a tangled state from before this session:
+The tangled "files-on-disk-but-not-in-git" state has been cleaned up:
 
-- `origin/v3-redesign` and `HEAD` are at `a933e4c` (Sprint 20).
-- Sprint 21 (tiles + DISABLED banners) and Sprint 22 (GPS + POWER) are
-  both uncommitted.
-- `git status` shows **staged deletions** for files that still exist
-  on disk (15 migrations, `server/db.py`, `server/modules/comms.py`,
-  `server/modules/system_.py`, `tests/unit/test_comms.py`,
-  `tests/unit/test_hw.py`, `tests/unit/test_trader.py`, …). They show
-  as untracked because the index thinks they're gone but the worktree
-  has them.
-- A large body of files appear entirely untracked: most of the v3
-  shell tree (`shell/src/transport/`, `state/`, `palette/`, `sextant/`,
-  most modules), most tests (`test_crypto`, `test_knowledge`,
-  `test_medical`, `test_omp_*`, `test_power`, `test_sextant`,
-  `test_system`, `test_dragon`, `test_build_dictionary`), all new docs
-  (`01-DESIGN-SPEC` … `07-V3-PATCHES`, `AUSPICE-MODULE-SPEC`,
-  `REBUILD-MODULE-SPEC*`), plus v2 leftovers (`legacy_server.py`,
-  `lora_*.py`, `crypto_utils.py`, `sounds/`, `templates/`, `static/`).
-- The pytest gate of "396 passing" depends on all those untracked test
-  files being present.
+- `.gitignore` extended (FUSE artefacts, sprint .bat helpers,
+  pytest-cache dirs, build .gz/.old artefacts, secrets, runtime
+  databases).
+- The full v3 tree is now tracked: `server/` (omp, llm, crypto,
+  plugins, all modules), `shell/src/` (chrome, components, palette,
+  sextant, state, transport, all modules, all styles), `tests/`
+  (fixtures, integration, full unit suite), `docs/` (01–07 design
+  specs, all ADRs including 0014, REBUILD/AUSPICE/SEXTANT specs,
+  preview HTML), `deploy/` (cardputer + setup + systemd), `tools/`
+  (sim, seed, build-dictionary, download-tiles, sample-remote-op).
+- v2 compat shim retained (`legacy_server.py`, `lora_*.py`,
+  `crypto_utils.py`, `train_dictionary.py`).
+- Cruft kept out: `keys/admin_private.pem`, `kiwix/`, `zim/`,
+  `sounds/`, `data/`, `tools/tiles/*.mbtiles`, `node_modules/`,
+  `__pycache__/`, `.fuse_hidden*`, `_git_commit_sprint*.bat`,
+  stray `Overseer` root file, `prepper_llm_project.md`.
 
-Before pushing, Ted needs to decide for each untracked group: track,
-gitignore, or delete. The Sprint 22 changes that ARE in the working
-tree:
-
-```
-server/modules/power.py        (+295 lines, Ina226Source, ShuntSource, _select_source)
-server/modules/navigation.py   (+388 lines, GPS sources + /api/n/gps/fix)
-tests/unit/test_power.py       (4 tests rewritten; +21 lines)
-tests/unit/test_hw_power.py    (new, 11 tests, +169 lines)
-tests/unit/test_hw_gps.py      (new, 21 tests, +346 lines)
-docs/STATUS.md                 (this update)
-```
+`origin/v3-redesign` is now one commit behind `HEAD`. Push when
+ready: `git push -u origin v3-redesign`.
 
 ---
 
