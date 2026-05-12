@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>O.V.E.R.S.E.E.R.</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+
+  :root {
+    --glow: #33ff33; --glow-dim: #1a8c1a; --glow-bright: #66ff66;
+    --glow-hot: #aaffaa; --amber: #ffaa00; --amber-dim: #996600;
+    --red: #ff3333; --red-dim: #991a1a; --bg: #0a0a0a; --border: #1a3a1a;
+  }
+
+  /* Module color themes — matches main OVERSEER UI */
+  .screen[data-module="knowledge"] {
+    --glow:#33ff33; --glow-dim:#1a8c1a; --glow-bright:#66ff66; --glow-hot:#aaffaa; --border:#1a3a1a;
+  }
+  .screen[data-module="comms"] {
+    --glow:#ffaa00; --glow-dim:#996600; --glow-bright:#ffcc44; --glow-hot:#ffddaa; --border:#3a2a0a;
+  }
+  .screen[data-module="recreation"] {
+    --glow:#00ccff; --glow-dim:#006688; --glow-bright:#44ddff; --glow-hot:#aaeeff; --border:#0a2a3a;
+  }
+  .screen[data-module="system"] {
+    --glow:#cccccc; --glow-dim:#666666; --glow-bright:#eeeeee; --glow-hot:#ffffff; --border:#2a2a2a;
+  }
+
+  body {
+    font-family:'Courier New','Lucida Console',monospace;
+    background:var(--bg); color:var(--glow);
+    height:100vh; height:100dvh;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+
+  /* Scanlines */
+  body::after {
+    content:''; position:fixed; top:0; left:0; right:0; bottom:0;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12) 0px,rgba(0,0,0,0.12) 1px,transparent 1px,transparent 3px);
+    pointer-events:none; z-index:9999;
+  }
+
+  /* Header */
+  .header {
+    border-bottom:1px solid var(--border); padding:8px 4px 8px;
+    text-align:center; flex-shrink:0; position:relative;
+  }
+  .title {
+    font-size:1.3em; font-weight:bold; letter-spacing:6px;
+    color:var(--glow-bright);
+    text-shadow:0 0 10px var(--glow),0 0 20px var(--glow-dim);
+  }
+  .subtitle { font-size:0.65em; color:var(--glow-dim); letter-spacing:2px; margin-top:3px; }
+  .operator-line { font-size:0.65em; color:var(--glow-dim); letter-spacing:2px; margin-top:5px; }
+  .operator-line .op-name {
+    color:var(--glow-bright); letter-spacing:3px; cursor:pointer;
+  }
+  .operator-line .op-name:hover { color:var(--glow-hot); }
+  .operator-line .op-switch { color:var(--glow-dim); font-size:0.85em; cursor:pointer; margin-left:4px; }
+  .link-status {
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--red); margin-right:4px; vertical-align:middle;
+  }
+  .link-status.up { background:#33ff33; }
+
+  /* Nav */
+  .nav {
+    display:flex; border-bottom:1px solid rgba(255,255,255,0.06);
+    flex-shrink:0; background:rgba(0,0,0,0.3);
+  }
+  .nav button {
+    flex:1; font-family:'Courier New',monospace; font-size:0.6em;
+    padding:8px 4px; background:transparent; color:var(--glow-dim);
+    border:none; border-bottom:2px solid transparent;
+    cursor:pointer; letter-spacing:1px; transition:all 0.2s;
+  }
+  .nav button:hover { color:var(--glow); background:rgba(255,255,255,0.02); }
+  .nav button.active {
+    color:var(--glow-bright); border-bottom-color:var(--glow);
+    text-shadow:0 0 6px var(--glow-dim);
+  }
+  .nav button .dot {
+    display:inline-block; width:5px; height:5px; border-radius:50%;
+    background:rgba(255,255,255,0.15); margin-right:4px; vertical-align:middle;
+  }
+  .nav button.active .dot { background:var(--glow); box-shadow:0 0 6px var(--glow); }
+
+  /* Panels */
+  .panel { display:none; flex:1; flex-direction:column; overflow:hidden; }
+  .panel.active { display:flex; }
+
+  /* Shared scrollable area */
+  .scroll-area { flex:1; overflow-y:auto; padding:8px 10px; }
+
+  /* ── COMMS ────────────────────────────────────────── */
+  .conv-list { flex:1; overflow-y:auto; }
+  .conv-header {
+    display:flex; align-items:center; padding:6px 10px;
+    border-bottom:1px solid var(--border); flex-shrink:0;
+    font-size:0.65em; color:var(--glow-dim); letter-spacing:2px;
+  }
+  .conv-header button {
+    margin-left:auto; font-family:'Courier New',monospace; font-size:1em;
+    padding:2px 8px; background:transparent; border:1px solid var(--border);
+    color:var(--glow); cursor:pointer;
+  }
+  .conv-item {
+    display:flex; align-items:center; gap:8px;
+    padding:12px 10px; border-bottom:1px solid rgba(255,255,255,0.03);
+    cursor:pointer; transition:background 0.15s; border-left:2px solid transparent;
+  }
+  .conv-item:hover { background:rgba(255,255,255,0.03); border-left-color:var(--glow-dim); }
+  .conv-info { flex:1; min-width:0; }
+  .conv-name { color:var(--glow-bright); font-size:0.8em; letter-spacing:1px; }
+  .conv-preview { color:var(--glow-dim); font-size:0.7em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv-meta { text-align:right; flex-shrink:0; }
+  .conv-time { color:var(--glow-dim); font-size:0.6em; }
+  .conv-badge { background:var(--glow); color:#000; font-size:0.55em; padding:1px 5px; font-weight:bold; margin-top:2px; display:inline-block; }
+
+  .thread-header {
+    display:flex; align-items:center; gap:8px; padding:6px 10px;
+    border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .back-btn {
+    background:transparent; border:none; color:var(--glow-dim);
+    font-family:'Courier New',monospace; font-size:1em; cursor:pointer; padding:2px 4px;
+  }
+  .back-btn:hover { color:var(--glow); }
+  .thread-name { color:var(--glow-bright); letter-spacing:2px; font-size:0.8em; }
+  .messages { flex:1; overflow-y:auto; padding:8px 10px 4px; display:flex; flex-direction:column; gap:6px; }
+  .bubble {
+    max-width:85%; padding:6px 10px; font-size:0.78em;
+    line-height:1.5; word-wrap:break-word; white-space:pre-wrap;
+    border:1px solid var(--border);
+  }
+  .bubble.sent { align-self:flex-end; background:rgba(255,255,255,0.05); border-color:var(--glow-dim); }
+  .bubble.recv { align-self:flex-start; background:rgba(255,255,255,0.02); }
+  .bubble-from { font-size:0.6em; color:var(--glow-bright); letter-spacing:1px; margin-bottom:2px; }
+  .bubble-meta { font-size:0.55em; color:var(--glow-dim); margin-top:2px; }
+  .bubble.sent .bubble-meta { text-align:right; }
+  .input-bar {
+    display:flex; gap:6px; padding:6px 8px;
+    border-top:1px solid var(--border); flex-shrink:0; align-items:flex-end;
+  }
+  .input-bar textarea {
+    flex:1; font-family:'Courier New',monospace; font-size:0.78em;
+    padding:6px 8px; background:rgba(255,255,255,0.03);
+    border:1px solid var(--border); color:var(--glow);
+    outline:none; resize:none; min-height:32px; max-height:80px; line-height:1.4;
+  }
+  .input-bar textarea:focus { border-color:var(--glow-dim); }
+  .char-ct { font-size:0.5em; color:var(--glow-dim); align-self:center; min-width:32px; text-align:right; }
+  .char-ct.warn { color:var(--amber); }
+  .char-ct.over { color:var(--red); }
+  .tx-btn {
+    font-family:'Courier New',monospace; font-size:0.65em;
+    padding:6px 10px; background:transparent;
+    border:1px solid var(--glow-dim); color:var(--glow);
+    cursor:pointer; flex-shrink:0; letter-spacing:1px;
+  }
+  .tx-btn:hover { background:var(--glow-dim); color:#000; }
+
+  /* ── KNOWLEDGE ────────────────────────────────────── */
+  .search-bar {
+    display:flex; gap:6px; padding:8px;
+    border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .search-bar input, .search-bar textarea {
+    flex:1; font-family:'Courier New',monospace; font-size:0.78em;
+    padding:6px 8px; background:rgba(255,255,255,0.03);
+    border:1px solid var(--border); color:var(--glow); outline:none;
+  }
+  .search-bar input:focus, .search-bar textarea:focus { border-color:var(--glow-dim); }
+  .search-bar button {
+    font-family:'Courier New',monospace; font-size:0.65em;
+    padding:6px 10px; background:transparent;
+    border:1px solid var(--glow-dim); color:var(--glow); cursor:pointer;
+  }
+  .kb-result {
+    padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.03);
+    cursor:pointer; border-left:2px solid transparent; padding-left:8px;
+  }
+  .kb-result:hover { border-left-color:var(--glow-dim); }
+  .kb-result-title { color:var(--glow-bright); font-size:0.85em; }
+  .kb-result-source { font-size:0.65em; color:var(--glow-dim); margin-top:2px; }
+  .kb-back {
+    font-family:'Courier New',monospace; font-size:0.65em; padding:4px 8px;
+    background:transparent; border:1px solid var(--border); color:var(--glow-dim);
+    cursor:pointer; margin-bottom:8px;
+  }
+
+  /* ── RECREATION ───────────────────────────────────── */
+  .rec-section-title {
+    font-size:0.7em; color:var(--glow); letter-spacing:3px;
+    margin-bottom:12px; padding-bottom:6px;
+    border-bottom:1px solid var(--border); text-shadow:0 0 6px var(--glow-dim);
+  }
+  .rec-cat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:20px; }
+  .rec-cat-btn {
+    font-family:'Courier New',monospace; font-size:0.7em;
+    padding:20px 10px; background:rgba(0,204,255,0.02);
+    border:1px solid var(--border); color:var(--glow);
+    cursor:pointer; text-align:center; transition:all 0.2s;
+    position:relative; overflow:hidden;
+  }
+  .rec-cat-btn::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg,transparent,var(--glow-dim),transparent);
+    opacity:0; transition:opacity 0.2s;
+  }
+  .rec-cat-btn:hover { border-color:var(--glow-dim); background:rgba(0,204,255,0.05); }
+  .rec-cat-btn:hover::before { opacity:1; }
+  .rec-cat-btn .cat-icon { font-size:2em; margin-bottom:8px; display:block; color:var(--glow-bright); text-shadow:0 0 8px var(--glow-dim); }
+  .rec-cat-btn .cat-name { letter-spacing:2px; display:block; color:var(--glow-bright); }
+  .rec-cat-btn .cat-count { font-size:0.75em; color:var(--glow-dim); display:block; margin-top:6px; }
+  .rec-game-item {
+    display:flex; align-items:center; gap:10px;
+    padding:12px 10px; border-bottom:1px solid rgba(255,255,255,0.03);
+    border-left:2px solid transparent; cursor:pointer; transition:all 0.15s;
+  }
+  .rec-game-item:hover { background:rgba(0,204,255,0.03); border-left-color:var(--glow-dim); }
+  .rec-game-title { color:var(--glow-bright); font-size:0.85em; letter-spacing:1px; }
+  .rec-game-desc { color:var(--glow-dim); font-size:0.7em; margin-top:3px; }
+
+  /* Game shared styles */
+  .game-board { font-family:'Courier New',monospace; font-size:0.85em; line-height:1.6; white-space:pre; color:var(--glow); margin:12px 0; text-align:center; }
+  .game-msg { font-size:0.8em; color:var(--glow-bright); text-align:center; margin:8px 0; letter-spacing:1px; }
+  .game-msg.win { color:var(--glow-bright); }
+  .game-msg.lose { color:var(--red); }
+  .game-input {
+    font-family:'Courier New',monospace; font-size:0.85em;
+    padding:8px 12px; background:rgba(255,255,255,0.03);
+    border:1px solid var(--border); color:var(--glow);
+    outline:none; text-align:center; letter-spacing:2px; width:100%; max-width:300px;
+  }
+  .game-input:focus { border-color:var(--glow-dim); }
+  .game-btn {
+    font-family:'Courier New',monospace; font-size:0.7em;
+    padding:6px 16px; background:transparent;
+    border:1px solid var(--glow-dim); color:var(--glow);
+    cursor:pointer; letter-spacing:1px; margin:4px; transition:all 0.15s;
+  }
+  .game-btn:hover { background:var(--glow-dim); color:#000; }
+  .game-btn.active { background:var(--glow); color:#000; }
+  .game-btn-row { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; margin:8px 0; }
+
+  /* ── SYSTEM ───────────────────────────────────────── */
+  .sys-info { padding:12px; font-size:0.8em; line-height:1.8; }
+  .sys-label { color:var(--glow-dim); }
+  .sys-value { color:var(--glow-bright); }
+
+  /* Progress */
+  .progress { padding:16px; text-align:center; color:var(--glow-dim); font-size:0.7em; }
+  .progress-bar { width:100%; height:3px; background:var(--border); margin:8px 0; }
+  .progress-fill { height:100%; background:var(--glow); transition:width 0.3s; }
+
+  .empty { padding:30px 16px; text-align:center; color:var(--glow-dim); font-size:0.75em; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div class="screen" id="terminal" data-module="comms">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="title">OVERSEER</div>
+    <div class="subtitle">Offline Vault of Essential Records for Survival, Emergency &amp; Endurance Response</div>
+    <div class="operator-line">
+      <span class="link-status" id="link-dot"></span>
+      OPERATOR: <span class="op-name" id="op-name" onclick="showCallsignInput()">---</span>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav">
+    <button class="active" onclick="switchModule('comms')" id="nav-comms"><span class="dot"></span>COMMS</button>
+    <button onclick="switchModule('knowledge')" id="nav-knowledge"><span class="dot"></span>KNOWLEDGE</button>
+    <button onclick="switchModule('recreation')" id="nav-recreation"><span class="dot"></span>RECREATION</button>
+    <button onclick="switchModule('system')" id="nav-system"><span class="dot"></span>SYSTEM</button>
+  </div>
+
+  <!-- ==================== COMMS ==================== -->
+  <div id="module-comms" class="panel active">
+    <!-- Conversation list -->
+    <div id="comms-convs" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="conv-header">
+        <span>CONVERSATIONS</span>
+        <button onclick="commsNewMsg()">+ NEW</button>
+      </div>
+      <div id="conv-list" class="conv-list"></div>
+    </div>
+    <!-- Thread view -->
+    <div id="comms-thread" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="thread-header">
+        <button class="back-btn" onclick="commsBackToList()">&lt;</button>
+        <span class="thread-name" id="thread-name">---</span>
+      </div>
+      <div id="thread-msgs" class="messages"></div>
+      <div class="input-bar">
+        <textarea id="chat-input" rows="1" placeholder="Type message..."
+                  oninput="autoResize(this);updateCharCount();"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+        <span class="char-ct" id="chat-ct"></span>
+        <button class="tx-btn" onclick="sendChat()">SEND</button>
+      </div>
+    </div>
+    <!-- New message picker -->
+    <div id="comms-new" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="thread-header">
+        <button class="back-btn" onclick="commsBackToList()">&lt;</button>
+        <span style="color:var(--glow-dim);letter-spacing:2px;font-size:0.75em;">NEW MESSAGE</span>
+      </div>
+      <div id="new-msg-list" class="conv-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== KNOWLEDGE ==================== -->
+  <div id="module-knowledge" class="panel">
+    <div class="search-bar">
+      <input type="text" id="kb-input" placeholder="Search knowledge base..."
+             onkeydown="if(event.key==='Enter')kbSearch();">
+      <button onclick="kbSearch()">SEARCH</button>
+    </div>
+    <div id="kb-content" class="scroll-area">
+      <div class="empty">Search the OVERSEER knowledge base.<br>Results arrive via the mesh network.</div>
+    </div>
+  </div>
+
+  <!-- ==================== KNOWLEDGE: ASK (sub-tab) ==================== -->
+  <div id="module-ask" class="panel">
+    <div class="search-bar">
+      <textarea id="ask-input" rows="2" placeholder="Ask OVERSEER anything..." style="resize:none;"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();askLLM();}"></textarea>
+      <button onclick="askLLM()" style="align-self:flex-end;">ASK</button>
+    </div>
+    <div id="ask-content" class="scroll-area">
+      <div class="empty">Ask a question. OVERSEER will search its knowledge base and respond.</div>
+    </div>
+  </div>
+
+  <!-- ==================== RECREATION ==================== -->
+  <div id="module-recreation" class="panel">
+    <!-- Browser -->
+    <div id="rec-browser" class="scroll-area"></div>
+    <!-- Game list -->
+    <div id="rec-gamelist" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="thread-header">
+        <button class="back-btn" onclick="recShowCategories()">&lt;</button>
+        <span id="rec-cat-title" style="color:var(--glow-dim);letter-spacing:2px;font-size:0.75em;"></span>
+      </div>
+      <div id="rec-game-list" class="scroll-area"></div>
+    </div>
+    <!-- Play area -->
+    <div id="rec-play" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="thread-header">
+        <button class="back-btn" onclick="recExitGame()">&lt;</button>
+        <span id="rec-play-title" style="color:var(--glow-bright);letter-spacing:2px;font-size:0.8em;">---</span>
+        <span id="rec-play-stats" style="margin-left:auto;font-size:0.6em;color:var(--glow-dim);"></span>
+      </div>
+      <div id="rec-play-area" class="scroll-area" style="display:flex;flex-direction:column;align-items:center;"></div>
+    </div>
+  </div>
+
+  <!-- ==================== SYSTEM ==================== -->
+  <div id="module-system" class="panel">
+    <div class="scroll-area sys-info" id="sys-content">
+      <div class="rec-section-title">MESH STATUS</div>
+      <div><span class="sys-label">CONNECTION:</span> <span class="sys-value" id="sys-link">CHECKING...</span></div>
+      <div><span class="sys-label">NODE:</span> <span class="sys-value" id="sys-node">---</span></div>
+      <div><span class="sys-label">OPERATOR:</span> <span class="sys-value" id="sys-operator">---</span></div>
+      <div style="margin-top:16px;"><span class="sys-label">GAMES CACHED:</span> <span class="sys-value" id="sys-games">---</span></div>
+      <div><span class="sys-label">MESSAGES CACHED:</span> <span class="sys-value" id="sys-msgs">---</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+const API = window.location.origin;
+let callsign = localStorage.getItem('overseer_callsign') || '';
+let currentContact = null;
+let allMessages = JSON.parse(localStorage.getItem('overseer_msgs') || '[]');
+let pollTimer = null;
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function ts() { const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,80)+'px'; }
+function updateCharCount() {
+  const c=new TextEncoder().encode(document.getElementById('chat-input').value).length;
+  const el=document.getElementById('chat-ct');
+  el.textContent=c+'B'; el.className='char-ct'+(c>200?' over':c>150?' warn':'');
+}
+
+// ── Init ──────────────────────────────────────────────────
+if (callsign) {
+  document.getElementById('op-name').textContent = callsign;
+} else {
+  showCallsignInput();
+}
+
+function showCallsignInput() {
+  const current = callsign || '';
+  const name = prompt('Enter your callsign:', current);
+  if (name && name.trim()) {
+    callsign = name.trim().toUpperCase();
+    localStorage.setItem('overseer_callsign', callsign);
+    document.getElementById('op-name').textContent = callsign;
+    document.getElementById('sys-operator').textContent = callsign;
+  }
+}
+
+// ── Module Switching ──────────────────────────────────────
+function switchModule(name) {
+  document.getElementById('terminal').setAttribute('data-module', name);
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-' + name).classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('module-' + name).classList.add('active');
+  if (name === 'comms') commsShowConvs();
+  if (name === 'recreation') recInit();
+  if (name === 'system') updateSysInfo();
+}
+
+// ── COMMS ─────────────────────────────────────────────────
+// Uses direct API when available (testing on OPi5), otherwise
+// messages are stored locally and sent via Meshtastic
+
+function commsShowConvs() {
+  document.getElementById('comms-convs').style.display = 'flex';
+  document.getElementById('comms-thread').style.display = 'none';
+  document.getElementById('comms-new').style.display = 'none';
+  currentContact = null;
+  loadConversations();
+}
+
+async function loadConversations() {
+  const el = document.getElementById('conv-list');
+  // Try server API first (works when on OPi5 network or testing at /relay)
+  try {
+    // Get user ID for this callsign
+    const ur = await fetch(API + '/comms/users');
+    const ud = await ur.json();
+    const me = ud.users.find(u => u.callsign === callsign);
+    if (!me) { renderLocalConvs(el); return; }
+
+    const resp = await fetch(API + '/comms/conversations/' + me.id);
+    const data = await resp.json();
+    if (!data.conversations.length) { el.innerHTML = '<div class="empty">No conversations yet.<br>Tap + NEW to start one.</div>'; return; }
+
+    let html = '';
+    data.conversations.forEach(c => {
+      let preview = c.last_message || '';
+      if (preview.length > 40) preview = preview.substring(0, 40) + '...';
+      if (c.last_message_from == me.id && preview) preview = 'You: ' + preview;
+      html += '<div class="conv-item" onclick="openThread(' + c.other_id + ',\'' + esc(c.callsign).replace(/'/g, "\\'") + '\')">';
+      html += '<div class="conv-info"><div class="conv-name">' + esc(c.callsign) + '</div>';
+      html += '<div class="conv-preview">' + esc(preview) + '</div></div>';
+      html += '<div class="conv-meta">';
+      if (c.last_message_at) html += '<div class="conv-time">' + formatTime(c.last_message_at) + '</div>';
+      if (c.unread_count > 0) html += '<div class="conv-badge">' + c.unread_count + '</div>';
+      html += '</div></div>';
+    });
+    el.innerHTML = html;
+    document.getElementById('link-dot').className = 'link-status up';
+  } catch(e) {
+    // Offline — show local messages
+    document.getElementById('link-dot').className = 'link-status';
+    renderLocalConvs(el);
+  }
+}
+
+function renderLocalConvs(el) {
+  const convs = {};
+  allMessages.forEach(m => {
+    const other = m.fromName === callsign ? m.toName : m.fromName;
+    if (!other) return;
+    if (!convs[other] || m.time > convs[other].time) {
+      convs[other] = { name: other, preview: m.text, time: m.time };
+    }
+  });
+  const sorted = Object.values(convs).sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+  if (!sorted.length) { el.innerHTML = '<div class="empty">No conversations yet.<br>Tap + NEW to start one.</div>'; return; }
+  let html = '';
+  sorted.forEach(c => {
+    let preview = c.preview || '';
+    if (preview.length > 40) preview = preview.substring(0, 40) + '...';
+    html += '<div class="conv-item" onclick="openLocalThread(\'' + esc(c.name).replace(/'/g, "\\'") + '\')">';
+    html += '<div class="conv-info"><div class="conv-name">' + esc(c.name) + '</div>';
+    html += '<div class="conv-preview">' + esc(preview) + '</div></div>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function formatTime(t) {
+  if (!t) return '';
+  const d = new Date(typeof t === 'number' ? t * 1000 : t);
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+async function openThread(contactId, contactName) {
+  currentContact = { id: contactId, name: contactName };
+  document.getElementById('comms-convs').style.display = 'none';
+  document.getElementById('comms-thread').style.display = 'flex';
+  document.getElementById('thread-name').textContent = contactName;
+
+  try {
+    // Get my user ID
+    const ur = await fetch(API + '/comms/users');
+    const ud = await ur.json();
+    const me = ud.users.find(u => u.callsign === callsign);
+    if (!me) { openLocalThread(contactName); return; }
+
+    const resp = await fetch(API + '/comms/thread/' + me.id + '/' + contactId);
+    const data = await resp.json();
+
+    const el = document.getElementById('thread-msgs');
+    let html = '';
+    data.messages.forEach(m => {
+      const isSent = m.from_user == me.id;
+      html += '<div class="bubble ' + (isSent ? 'sent' : 'recv') + '">';
+      if (!isSent) html += '<div class="bubble-from">' + esc(data.contact.callsign) + '</div>';
+      html += esc(m.body);
+      html += '<div class="bubble-meta">' + formatTime(m.sent_at) + '</div>';
+      html += '</div>';
+    });
+    if (!data.messages.length) html = '<div class="empty">No messages yet.</div>';
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+
+    // Mark read
+    data.messages.forEach(m => {
+      if (m.from_user != me.id && !m.read_at) fetch(API + '/comms/read/' + m.id, {method:'POST'}).catch(()=>{});
+    });
+  } catch(e) {
+    // Offline — show local thread
+    openLocalThread(contactName);
+  }
+
+  document.getElementById('chat-input').focus();
+}
+
+function openLocalThread(contactName) {
+  currentContact = { id: null, name: contactName };
+  document.getElementById('comms-convs').style.display = 'none';
+  document.getElementById('comms-thread').style.display = 'flex';
+  document.getElementById('thread-name').textContent = contactName;
+
+  const msgs = allMessages.filter(m => m.fromName === contactName || m.toName === contactName);
+  const el = document.getElementById('thread-msgs');
+  let html = '';
+  msgs.forEach(m => {
+    const isSent = m.fromName === callsign;
+    html += '<div class="bubble ' + (isSent ? 'sent' : 'recv') + '">';
+    if (!isSent) html += '<div class="bubble-from">' + esc(m.fromName) + '</div>';
+    html += esc(m.text);
+    html += '<div class="bubble-meta">' + (m.time || '') + '</div>';
+    html += '</div>';
+  });
+  if (!html) html = '<div class="empty">No messages yet.</div>';
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function commsBackToList() { commsShowConvs(); }
+
+async function sendChat() {
+  if (!currentContact || !callsign) return;
+  const input = document.getElementById('chat-input');
+  const body = input.value.trim();
+  if (!body) return;
+
+  // Store locally
+  allMessages.push({ fromName: callsign, toName: currentContact.name, text: body, time: ts() });
+  localStorage.setItem('overseer_msgs', JSON.stringify(allMessages.slice(-500)));
+
+  // Try server API if user exists
+  try {
+    const ur = await fetch(API + '/comms/users');
+    const ud = await ur.json();
+    const me = ud.users.find(u => u.callsign === callsign);
+    if (me && currentContact.id) {
+      await fetch(API + '/comms/send', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({from: me.id, to: currentContact.id, body: body})
+      });
+    }
+  } catch(e) {}
+
+  input.value = ''; autoResize(input); updateCharCount();
+  if (currentContact.id) openThread(currentContact.id, currentContact.name);
+  else openLocalThread(currentContact.name);
+}
+
+async function commsNewMsg() {
+  document.getElementById('comms-convs').style.display = 'none';
+  document.getElementById('comms-new').style.display = 'flex';
+
+  let html = '';
+  // Try to load registered users from server
+  try {
+    const resp = await fetch(API + '/comms/users');
+    const data = await resp.json();
+    data.users.forEach(u => {
+      if (u.callsign !== callsign) {
+        html += '<div class="conv-item" onclick="openThread(' + u.id + ',\'' + esc(u.callsign).replace(/'/g, "\\'") + '\')">';
+        html += '<div class="conv-info"><div class="conv-name">' + esc(u.callsign) + '</div></div></div>';
+      }
+    });
+  } catch(e) {}
+
+  // Always add option to message any callsign manually
+  html += '<div style="padding:12px 10px;border-top:1px solid var(--border);">';
+  html += '<div style="font-size:0.65em;color:var(--glow-dim);letter-spacing:2px;margin-bottom:8px;">MESSAGE ANY CALLSIGN</div>';
+  html += '<div style="display:flex;gap:6px;"><input type="text" id="new-callsign" placeholder="CALLSIGN" style="flex:1;font-family:\'Courier New\',monospace;font-size:0.8em;padding:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--glow);outline:none;text-transform:uppercase;letter-spacing:2px;" onkeydown="if(event.key===\'Enter\')startNewChat();">';
+  html += '<button class="tx-btn" onclick="startNewChat()">GO</button></div></div>';
+
+  document.getElementById('new-msg-list').innerHTML = html;
+}
+
+function startNewChat() {
+  const input = document.getElementById('new-callsign');
+  const name = input.value.trim().toUpperCase();
+  if (!name || name === callsign) return;
+  openLocalThread(name);
+}
+
+// ── KNOWLEDGE ─────────────────────────────────────────────
+let kbResults = [];
+
+async function kbSearch() {
+  const q = document.getElementById('kb-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('kb-content');
+  el.innerHTML = '<div class="progress">Searching...<div class="progress-bar"><div class="progress-fill" style="width:30%"></div></div></div>';
+
+  try {
+    const resp = await fetch(API + '/library/search?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    kbResults = data.results || [];
+    let html = '';
+    kbResults.forEach((r, i) => {
+      html += '<div class="kb-result" onclick="kbFetch(' + i + ')">';
+      html += '<div class="kb-result-title">' + esc(r.title) + '</div>';
+      if (r.source) html += '<div class="kb-result-source">' + esc(r.source) + '</div>';
+      html += '</div>';
+    });
+    el.innerHTML = html || '<div class="empty">No results found.</div>';
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Cannot reach knowledge base.</div>';
+  }
+}
+
+async function kbFetch(idx) {
+  if (!kbResults[idx]) return;
+  const el = document.getElementById('kb-content');
+  el.innerHTML = '<div class="progress">Loading article...</div>';
+
+  try {
+    const resp = await fetch(API + '/library/article?path=' + encodeURIComponent(kbResults[idx].link));
+    const data = await resp.json();
+    let html = '<button class="kb-back" onclick="kbBackToResults()">&lt; RESULTS</button>';
+    html += '<div style="font-size:0.9em;color:var(--glow-bright);margin-bottom:8px;letter-spacing:1px;">' + esc(data.title || '') + '</div>';
+    html += '<div style="white-space:pre-wrap;line-height:1.7;font-size:0.8em;">' + esc(data.text || 'No content') + '</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Failed to load article.</div>';
+  }
+}
+
+function kbBackToResults() {
+  if (kbResults.length) {
+    let html = '';
+    kbResults.forEach((r, i) => {
+      html += '<div class="kb-result" onclick="kbFetch(' + i + ')">';
+      html += '<div class="kb-result-title">' + esc(r.title) + '</div>';
+      if (r.source) html += '<div class="kb-result-source">' + esc(r.source) + '</div>';
+      html += '</div>';
+    });
+    document.getElementById('kb-content').innerHTML = html;
+  }
+}
+
+// ── LLM (ASK) ─────────────────────────────────────────────
+async function askLLM() {
+  const input = document.getElementById('ask-input');
+  const q = input.value.trim();
+  if (!q) return;
+  const el = document.getElementById('ask-content');
+  el.innerHTML = '<div class="progress">Querying OVERSEER...<div class="progress-bar"><div class="progress-fill" style="width:10%"></div></div></div>';
+
+  try {
+    const resp = await fetch(API + '/query', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query: q, rag: true, history: []})
+    });
+    // SSE streaming response
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const d = JSON.parse(line.substring(6));
+          if (d.token) { text += d.token; el.innerHTML = '<div style="padding:10px;white-space:pre-wrap;line-height:1.7;font-size:0.8em;">' + esc(text) + '</div>'; }
+          if (d.done) break;
+        } catch(e) {}
+      }
+    }
+    if (!text) el.innerHTML = '<div class="empty">No response received.</div>';
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Cannot reach OVERSEER. Try again when connected.</div>';
+  }
+}
+
+// ── RECREATION ────────────────────────────────────────────
+let recEngine = null;
+let recCurrentCat = null;
+
+function recInit() {
+  if (!recEngine) recLoadEngine();
+  if (recEngine) recShowCategories();
+  else recShowSync();
+}
+
+async function recShowSync() {
+  const el = document.getElementById('rec-browser');
+  el.style.display = 'block';
+  document.getElementById('rec-gamelist').style.display = 'none';
+  document.getElementById('rec-play').style.display = 'none';
+
+  try {
+    const resp = await fetch(API + '/games/catalog');
+    const catalog = await resp.json();
+    const cachedVer = parseInt(localStorage.getItem('games_engine_ver') || '0');
+    let updates = [];
+    if (catalog.engine_version > cachedVer) updates.push({id:'_engine', name:'Game Engine v'+catalog.engine_version, size:catalog.engine_compressed, type:'engine'});
+    catalog.games.forEach(g => {
+      const cv = parseInt(localStorage.getItem('games_dataver_'+g.id)||'0');
+      if (g.version > cv) updates.push({id:g.id, name:g.name+' v'+g.version, size:g.compressed_size, type:'data'});
+    });
+
+    if (!updates.length && localStorage.getItem('games_engine')) {
+      recLoadEngine();
+      recShowCategories();
+      return;
+    }
+
+    let html = '<div class="rec-section-title">GAME SYNC</div>';
+    if (!updates.length) {
+      html += '<div style="color:var(--glow);font-size:0.75em;margin:8px 0;">All games up to date.</div>';
+      html += '<div class="game-btn-row"><button class="game-btn" onclick="recShowCategories()">PLAY</button></div>';
+    } else {
+      updates.forEach((u,i) => {
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:0.7em;">';
+        html += '<input type="checkbox" id="sc-'+i+'" checked>';
+        html += '<label for="sc-'+i+'" style="flex:1;color:var(--glow);">'+esc(u.name)+'</label>';
+        html += '<span style="color:var(--glow-dim);">'+(u.size/1024).toFixed(1)+'KB</span></div>';
+      });
+      html += '<div class="game-btn-row"><button class="game-btn" onclick="recDoSync()">SYNC</button><button class="game-btn" onclick="recShowCategories()">SKIP</button></div>';
+      html += '<div id="sync-prog"></div>';
+    }
+    window._recUpdates = updates;
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div class="rec-section-title">GAMES</div><div class="empty">Cannot reach base for game updates.<br>Using cached games.</div>' +
+      '<div class="game-btn-row"><button class="game-btn" onclick="recShowCategories()">PLAY CACHED</button></div>';
+    recLoadEngine();
+  }
+}
+
+async function recDoSync() {
+  const updates = window._recUpdates || [];
+  const prog = document.getElementById('sync-prog');
+  for (let i = 0; i < updates.length; i++) {
+    const cb = document.getElementById('sc-'+i);
+    if (!cb || !cb.checked) continue;
+    const u = updates[i];
+    prog.innerHTML = '<div style="font-size:0.65em;color:var(--glow);margin-top:6px;">Syncing: '+esc(u.name)+'...</div>';
+    try {
+      if (u.type==='engine') {
+        const r = await fetch(API+'/games/engine'); const t = await r.text();
+        localStorage.setItem('games_engine',t); localStorage.setItem('games_engine_ver',r.headers.get('X-Engine-Version')||'1');
+      } else {
+        const r = await fetch(API+'/games/data/'+u.id); const t = await r.text();
+        localStorage.setItem('games_data_'+u.id,t); localStorage.setItem('games_dataver_'+u.id,String(u.version||1));
+      }
+    } catch(e) { prog.innerHTML='<div style="font-size:0.65em;color:var(--red);">Failed: '+esc(u.name)+'</div>'; }
+  }
+  recLoadEngine();
+  setTimeout(recShowCategories, 500);
+}
+
+function recLoadEngine() {
+  const js = localStorage.getItem('games_engine');
+  if (!js || window.GAMES) { recEngine = window.GAMES; return !!recEngine; }
+  try {
+    const safe = js.replace(/^const GAMES\s*=/, 'window.GAMES =');
+    new Function(safe)();
+    recEngine = window.GAMES;
+
+    // Stat sync wiring
+    window._gameSyncStat = function(userId, gameId, stats) {
+      Object.keys(stats).forEach(key => {
+        fetch(API+'/games/stats',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({user_id:userId,game_id:gameId,key:key,value:String(stats[key])})}).catch(()=>{});
+      });
+    };
+    return true;
+  } catch(e) { console.error('Engine load failed:',e); return false; }
+}
+
+function recShowCategories() {
+  if (!recEngine) { recShowSync(); return; }
+  const el = document.getElementById('rec-browser');
+  el.style.display = 'block';
+  document.getElementById('rec-gamelist').style.display = 'none';
+  document.getElementById('rec-play').style.display = 'none';
+
+  let html = '<div class="rec-section-title">GAME CATEGORIES</div><div class="rec-cat-grid">';
+  recEngine.categories.forEach(cat => {
+    const count = recEngine.catalog.filter(g => g.cat === cat.id).length;
+    html += '<div class="rec-cat-btn" onclick="recShowGames(\''+cat.id+'\')">';
+    html += '<span class="cat-icon">'+cat.icon+'</span>';
+    html += '<span class="cat-name">'+cat.name+'</span>';
+    html += '<span class="cat-count">'+count+' game'+(count!==1?'s':'')+'</span></div>';
+  });
+  html += '</div><div style="text-align:center;"><button class="game-btn" style="font-size:0.6em;" onclick="recShowSync()">CHECK FOR UPDATES</button></div>';
+  el.innerHTML = html;
+}
+
+function recShowGames(catId) {
+  recCurrentCat = catId;
+  document.getElementById('rec-browser').style.display = 'none';
+  document.getElementById('rec-gamelist').style.display = 'flex';
+  document.getElementById('rec-play').style.display = 'none';
+  const cat = recEngine.categories.find(c => c.id === catId);
+  document.getElementById('rec-cat-title').textContent = cat ? cat.name : catId;
+  const games = recEngine.catalog.filter(g => g.cat === catId);
+  let html = '';
+  games.forEach(g => {
+    const stats = recEngine.getStats(callsign, g.id);
+    const played = stats.played || 0;
+    html += '<div class="rec-game-item" onclick="recLaunch(\''+g.id+'\')">';
+    html += '<div><div class="rec-game-title">'+esc(g.name)+'</div>';
+    html += '<div class="rec-game-desc">'+esc(g.desc)+'</div></div>';
+    if (parseInt(played)) {
+      html += '<div style="margin-left:auto;text-align:right;flex-shrink:0;">';
+      if (stats.wins) html += '<div style="font-size:0.55em;color:var(--glow-dim);">W: '+stats.wins+'</div>';
+      html += '<div style="font-size:0.7em;color:var(--glow);">'+played+' played</div></div>';
+    }
+    html += '</div>';
+  });
+  document.getElementById('rec-game-list').innerHTML = html || '<div class="empty">No games in this category.</div>';
+}
+
+function recLaunch(gameId) {
+  document.getElementById('rec-browser').style.display = 'none';
+  document.getElementById('rec-gamelist').style.display = 'none';
+  document.getElementById('rec-play').style.display = 'flex';
+  const game = recEngine.catalog.find(g => g.id === gameId);
+  document.getElementById('rec-play-title').textContent = game ? game.name : gameId;
+
+  const hasDiff = ['hangman','codebreaker','numberhunt','tictactoe','morse'].includes(gameId);
+  const area = document.getElementById('rec-play-area');
+  if (hasDiff) {
+    const diffs = gameId==='morse'?[['beginner','BEGINNER'],['intermediate','INTERMEDIATE'],['advanced','ADVANCED']]:[['easy','EASY'],['medium','MEDIUM'],['hard','HARD']];
+    let html = '<div style="margin-top:20px;text-align:center;"><div style="font-size:0.7em;color:var(--glow-dim);letter-spacing:2px;margin-bottom:12px;">SELECT DIFFICULTY</div><div class="game-btn-row">';
+    diffs.forEach(([v,l]) => { html += '<button class="game-btn" onclick="recStart(\''+gameId+'\',\''+v+'\')">'+l+'</button>'; });
+    html += '</div></div>';
+    area.innerHTML = html;
+  } else { recStart(gameId); }
+}
+
+function recStart(gameId, diff) {
+  recEngine.launch(gameId, document.getElementById('rec-play-area'), callsign, diff);
+}
+
+function recExitGame() {
+  document.getElementById('rec-play').style.display = 'none';
+  if (recCurrentCat) recShowGames(recCurrentCat);
+  else recShowCategories();
+}
+
+// ── SYSTEM ────────────────────────────────────────────────
+function updateSysInfo() {
+  document.getElementById('sys-operator').textContent = callsign || '---';
+  const gamesCount = recEngine ? recEngine.catalog.length : 0;
+  document.getElementById('sys-games').textContent = gamesCount + ' games';
+  document.getElementById('sys-msgs').textContent = allMessages.length + ' messages';
+
+  // Check link
+  fetch(API + '/comms/users').then(r => {
+    document.getElementById('sys-link').textContent = 'CONNECTED';
+    document.getElementById('sys-link').style.color = 'var(--glow-bright)';
+    document.getElementById('link-dot').className = 'link-status up';
+  }).catch(() => {
+    document.getElementById('sys-link').textContent = 'OFFLINE';
+    document.getElementById('sys-link').style.color = 'var(--red)';
+    document.getElementById('link-dot').className = 'link-status';
+  });
+}
+
+// ── Startup ───────────────────────────────────────────────
+recLoadEngine();
+commsShowConvs();
+setInterval(() => {
+  if (currentContact && currentContact.id) openThread(currentContact.id, currentContact.name);
+  else if (!currentContact) loadConversations();
+}, 5000);
+updateSysInfo();
+setInterval(updateSysInfo, 30000);
+</script>
+</body>
+</html>

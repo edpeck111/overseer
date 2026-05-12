@@ -1,0 +1,12 @@
+{
+  "id": "tictactoe",
+  "version": 1,
+  "name": "Tic-Tac-Toe",
+  "category": "classic",
+  "description": "Classic grid game vs the OVERSEER AI",
+  "config": {
+    "easy": {"ai_mistakes": 0.4},
+    "medium": {"ai_mistakes": 0.15},
+    "hard": {"ai_mistakes": 0}
+  }
+}

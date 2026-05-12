@@ -1,0 +1,24 @@
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--rule);
+  padding: 5px 10px;
+  font-size: 0.92em;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.breadcrumb .arrow { color: var(--rule-bright); margin: 0 8px; }
+.breadcrumb .crumb { color: var(--fg); }
+.breadcrumb .crumb.active { color: var(--fg-bright); text-shadow: var(--glow-soft); }
+.breadcrumb .pill {
+  margin-left: auto;
+  background: var(--rule-dim);
+  border: 1px solid var(--rule-bright);
+  color: var(--amber);
+  padding: 1px 8px;
+  font-size: 0.95em;
+  letter-spacing: 0.1em;
+}

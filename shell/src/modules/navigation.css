@@ -32,19 +32,31 @@
 .nav-compass-row .cat     { color: var(--fg-dim); letter-spacing: 0.08em; }
 .nav-compass-row .dist    { color: var(--fg); text-align: right; }
 
-.nav-map-meta { color: var(--fg-dim); font-size: 0.9em; padding: 4px 0; }
-.nav-map {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.9em;
-  line-height: 1.0;
-  letter-spacing: -0.02em;
-  white-space: pre;
-  color: var(--fg);
-  padding: 8px;
+.nav-map-header { display: flex; flex-direction: column; gap: 4px; padding: 0 0 6px 0; }
+.nav-map-meta { color: var(--fg-dim); font-size: 0.9em; }
+
+/* Real Leaflet map container */
+.nav-leaflet-map {
+  width: 100%;
+  height: calc(100vh - 160px);
+  min-height: 300px;
   border: 1px solid var(--rule);
-  background: var(--bg-panel);
-  overflow: auto;
-  min-height: 12em;
+  position: relative;
+  z-index: 1;
+}
+/* Leaflet popup — match terminal palette */
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--rule); border-radius: 0; box-shadow: none;
+}
+.leaflet-popup-tip { background: var(--bg-panel); }
+.leaflet-popup-content b { color: var(--fg-bright); }
+.leaflet-control-zoom a {
+  background: var(--bg-panel) !important; color: var(--fg) !important;
+  border-color: var(--rule) !important;
+}
+.leaflet-control-attribution {
+  background: var(--bg-panel) !important; color: var(--fg-dim) !important; font-size: 0.7em;
 }
 
 .nav-ov-row { display: flex; gap: 12px; padding: 4px 8px; border-bottom: 1px dashed var(--rule); }

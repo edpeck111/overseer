@@ -1,0 +1,6 @@
+# Force LF line endings on shell scripts (Windows CRLF breaks bash)
+*.sh text eol=lf
+deploy.sh text eol=lf
+
+# Windows BAT files keep CRLF
+*.bat text eol=crlf

@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>OVERSEER v3 — REBUILD Module Preview</title>
+<style>
+/* ======================================================================
+   OVERSEER v3 — REBUILD module visual preview
+   Matches the v3 chrome (PHOSPHOR theme, CP437 box drawing,
+   persistent status strip + breadcrumb + F-key bar)
+   ====================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* PHOSPHOR theme tokens */
+  --bg:        #0a0e0a;
+  --bg-panel:  #0d1410;
+  --fg:        #b6ffb6;
+  --fg-dim:    #5a8c5a;
+  --fg-faint:  #2d4a2d;
+  --accent:    #00ff66;
+  --warn:      #ffcc44;
+  --danger:    #ff5555;
+  --info:      #66ccff;
+  --magenta:   #d877ff;
+
+  --frame:     #2d4a2d;
+  --frame-hi:  #5a8c5a;
+
+  --grid-cell-w: 0.62ch;
+  --grid-cell-h: 1.18em;
+
+  --font-mono: 'JetBrains Mono', 'Iosevka', 'SF Mono', Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.18;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* CRT scanline + flicker overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,255,102,0.025) 0px,
+    rgba(0,255,102,0.025) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  z-index: 100;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%);
+  z-index: 101;
+}
+
+/* ====================== preview controls ========================= */
+.preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: #050805;
+  border-bottom: 1px solid var(--frame);
+  padding: 8px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+}
+.preview-bar .label {
+  color: var(--fg-dim);
+  margin-right: 8px;
+  letter-spacing: 0.08em;
+}
+.preview-bar button {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--frame);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+.preview-bar button:hover {
+  color: var(--accent);
+  border-color: var(--frame-hi);
+}
+.preview-bar button.active {
+  background: var(--frame);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.preview-bar .sep {
+  color: var(--fg-faint);
+  margin: 0 4px;
+}
+
+/* ====================== terminal frame ========================= */
+.terminal-stack {
+  padding: 24px 12px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  align-items: center;
+}
+.terminal {
+  background: var(--bg-panel);
+  border: 1px solid var(--frame);
+  box-shadow:
+    0 0 0 1px rgba(0,255,102,0.08),
+    0 0 24px rgba(0,255,102,0.06),
+    inset 0 0 60px rgba(0,255,102,0.02);
+  width: 100%;
+  max-width: calc(80 * var(--grid-cell-w) + 28px);
+  padding: 10px 14px;
+  font-size: 13px;
+  position: relative;
+}
+
+/* phone-narrow viewport */
+.viewport-phone .terminal { max-width: calc(60 * var(--grid-cell-w) + 28px); font-size: 11px; }
+.viewport-tablet .terminal { max-width: calc(80 * var(--grid-cell-w) + 28px); font-size: 13px; }
+.viewport-desktop .terminal { max-width: calc(100 * var(--grid-cell-w) + 28px); font-size: 14px; }
+
+.screen-label {
+  position: absolute;
+  top: -10px;
+  left: 18px;
+  background: var(--bg);
+  color: var(--fg-dim);
+  font-size: 10px;
+  padding: 0 8px;
+  letter-spacing: 0.15em;
+}
+
+/* ====================== chrome regions ========================= */
+.chrome {
+  white-space: pre;
+  font-variant-ligatures: none;
+}
+
+.chrome .status-strip {
+  color: var(--fg-dim);
+  border-bottom: 1px dashed var(--frame);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.92em;
+}
+.chrome .status-strip .l { color: var(--fg-dim); }
+.chrome .status-strip .c { color: var(--accent); letter-spacing: 0.15em; }
+.chrome .status-strip .r { color: var(--fg-dim); }
+.chrome .status-strip .live { color: var(--accent); }
+.chrome .status-strip .warn { color: var(--warn); }
+
+.chrome .breadcrumb {
+  color: var(--fg);
+  margin-bottom: 6px;
+  font-size: 0.92em;
+}
+.chrome .breadcrumb .sep { color: var(--fg-faint); }
+.chrome .breadcrumb .here { color: var(--accent); }
+.chrome .breadcrumb .theme {
+  float: right;
+  color: var(--fg-faint);
+  letter-spacing: 0.1em;
+}
+
+.chrome .content {
+  white-space: pre;
+  color: var(--fg);
+  min-height: 18em;
+}
+
+.chrome .fkeys {
+  border-top: 1px dashed var(--frame);
+  padding-top: 4px;
+  margin-top: 4px;
+  font-size: 0.92em;
+  color: var(--fg-dim);
+}
+.chrome .fkeys .key {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* highlighted spans inside content */
+.hi-good { color: var(--accent); font-weight: 500; }
+.hi-warn { color: var(--warn); }
+.hi-bad  { color: var(--danger); }
+.hi-info { color: var(--info); }
+.hi-dim  { color: var(--fg-dim); }
+.hi-faint { color: var(--fg-faint); }
+.hi-mag  { color: var(--magenta); }
+.hi-sel  {
+  background: var(--frame);
+  color: var(--accent);
+  font-weight: 700;
+}
+.hi-bold { color: var(--accent); font-weight: 700; }
+.hi-tag-kb   { color: var(--info); font-weight: 700; }
+.hi-tag-gen  { color: var(--warn); font-weight: 700; }
+.hi-tag-spec { color: var(--danger); font-weight: 700; }
+.hi-tag-canon { color: var(--accent); }
+.hi-tag-peer { color: var(--info); }
+.hi-tag-draft { color: var(--warn); }
+
+/* blinking cursor in input fields */
+.cursor::after {
+  content: '_';
+  color: var(--accent);
+  animation: blink 1.06s steps(2, jump-none) infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* gentle phosphor glow */
+.glow {
+  text-shadow: 0 0 6px currentColor;
+}
+
+/* hide screens not active */
+.terminal { display: none; }
+.terminal.show { display: block; }
+
+/* preview footer */
+.foot {
+  text-align: center;
+  color: var(--fg-faint);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  padding: 20px 0 40px;
+}
+</style>
+</head>
+<body class="viewport-tablet">
+
+<div class="preview-bar">
+  <span class="label">SCREEN</span>
+  <button data-screen="atlas" class="active">ATLAS</button>
+  <button data-screen="tree">TECH TREE</button>
+  <button data-screen="recipes">RECIPES</button>
+  <button data-screen="recipe-card">RECIPE CARD</button>
+  <button data-screen="substitute">SUBSTITUTE</button>
+  <button data-screen="design">DESIGN</button>
+  <button data-screen="comms-builds">COMMS /builds</button>
+  <span class="sep">│</span>
+  <span class="label">VIEWPORT</span>
+  <button data-viewport="phone">PHONE</button>
+  <button data-viewport="tablet" class="active">TABLET</button>
+  <button data-viewport="desktop">DESKTOP</button>
+</div>
+
+<div class="terminal-stack">
+
+<!-- ============== SCREEN: ATLAS ============== -->
+<div class="terminal show" data-screen="atlas">
+<span class="screen-label">A · ATLAS</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">REBUILD <span class="sep">›</span> <span class="here">ATLAS</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+   ┌─ YOU ARE HERE ──────────────────────────────────────┐
+   │  Tier reached:  <span class="hi-good">III ELECTRIC</span> (partial)             │
+   │  Anchor:        salvage + 12V solar + handtools     │
+   │  Next gate:     <span class="hi-warn">insulated wire stockpile</span>            │
+   │  Achieved:      <span class="hi-good">14</span> nodes   In progress: <span class="hi-warn">3</span>   Locked: <span class="hi-faint">28</span>   │
+   └─────────────────────────────────────────────────────┘
+
+  ╔═══════╗   ╔═══════╗   ╔═══════╗   ╔═══════╗   ╔═══════╗   ╔════════╗
+  ║  <span class="hi-good">0</span>    ║──▶║  <span class="hi-good">I</span>    ║──▶║  <span class="hi-good">II</span>   ║──▶║  <span class="hi-warn">III</span>  ║──▶║  IV   ║──▶║   V    ║
+  ║ STONE ║   ║ FIRE  ║   ║ METAL ║   ║<span class="hi-warn">STEAM</span> ║   ║ ELEC  ║   ║DIGITAL ║
+  ╚═══════╝   ╚═══════╝   ╚═══════╝   ╚═══▲═══╝   ╚═══════╝   ╚════════╝
+   <span class="hi-good">░░░░░░░</span>     <span class="hi-good">▒▒▒▒▒▒▒</span>     <span class="hi-good">▓▓▓▓▓▓▓</span>     <span class="hi-warn">███████</span>     <span class="hi-faint">░░░░░░░</span>     <span class="hi-faint">░░░░░░░░</span>
+   reached     reached     reached     <span class="hi-warn">PARTIAL</span>     ahead       distant
+
+  Tier III contents (12):
+   <span class="hi-good">✓</span> charcoal kiln          <span class="hi-good">✓</span> small forge         <span class="hi-warn">◐</span> electric motor
+   <span class="hi-good">✓</span> lime kiln              <span class="hi-good">✓</span> wood lathe          <span class="hi-warn">◐</span> wind turbine
+   <span class="hi-warn">◐</span> coal smelting          <span class="hi-faint">◯</span> telegraph wire      <span class="hi-faint">◯</span> vacuum tube
+   <span class="hi-good">✓</span> pottery wheel          <span class="hi-good">✓</span> rocket-mass heater  <span class="hi-faint">◯</span> early radio
+
+  Legend:  <span class="hi-good">✓ achieved</span>   <span class="hi-warn">◐ in progress</span>   <span class="hi-faint">◯ locked</span>   <span class="hi-bad">⚠ blocked</span>
+
+</div>
+<div class="fkeys">[<span class="key">↑↓</span>] tier  [<span class="key">Enter</span>] drill in  [<span class="key">/</span>] search  [<span class="key">T</span>] tree view  [<span class="key">M</span>] mark  [<span class="key">?</span>] help  [<span class="key">q</span>] back</div>
+</div>
+</div>
+
+<!-- ============== SCREEN: TECH TREE ============== -->
+<div class="terminal" data-screen="tree">
+<span class="screen-label">T · TECH TREE</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">REBUILD <span class="sep">›</span> TREE <span class="sep">›</span> <span class="here">electric-motor</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+  prerequisites              FOCUS                  unlocks
+  ─────────────              ─────                  ───────
+
+  [<span class="hi-good">✓</span>] copper wire ─────────┐                  ┌──── [<span class="hi-faint">◯</span>] alternator
+                            │                  │
+  [<span class="hi-good">✓</span>] iron core ───────────┤                  ├──── [<span class="hi-faint">◯</span>] generator
+                            ▼                  │
+  [<span class="hi-warn">◐</span>] insulators ────────▶ <span class="hi-bold">◆ ELECTRIC</span> ───────▶├──── [<span class="hi-faint">◯</span>] electric pump
+                            │   <span class="hi-bold">MOTOR</span>    │      │
+  [<span class="hi-good">✓</span>] permanent magnet ────┤             │      └──── [<span class="hi-faint">◯</span>] EV conversion
+                            │   <span class="hi-dim">v3.0</span>     │
+  [<span class="hi-good">✓</span>] mechanical lathe ────┘             │
+
+  ── DETAILS ─────────────────────────────────────────────────────────
+  Source:    [<span class="hi-info">RECIPE: motor-from-scratch.md</span>]   [<span class="hi-info">KB: Appropedia/motor</span>]
+  Time est:  6-12 hours skilled, 2-3 days first attempt
+  Skill:     intermediate  (requires hand-winding accuracy)
+  Risk:      <span class="hi-good">low</span>  (no high voltage during build)
+  Status:    <span class="hi-warn">◐ blocked on insulators</span>  →  see <span class="hi-info">SUBSTITUTE</span>
+
+  Substitution paths (auto):
+    • salvaged enamelled wire (stripped from motors)         [<span class="hi-good">BEST</span>]
+    • shellac-coated copper bar wire                         [<span class="hi-warn">PARTIAL</span>]
+    • cotton-insulated copper from old transformers          [<span class="hi-warn">PARTIAL</span>]
+
+</div>
+<div class="fkeys">[<span class="key">hjkl</span>] move  [<span class="key">Enter</span>] focus  [<span class="key">R</span>]ecipe  [<span class="key">S</span>]ub  [<span class="key">B</span>]ack  [<span class="key">?</span>] help  [<span class="key">q</span>]</div>
+</div>
+</div>
+
+<!-- ============== SCREEN: RECIPES LIST ============== -->
+<div class="terminal" data-screen="recipes">
+<span class="screen-label">R · RECIPES LIST</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">REBUILD <span class="sep">›</span> <span class="here">RECIPES</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+ /charcoal<span class="cursor"></span>                                           <span class="hi-dim">43 canonical · 4 peer · 2 draft</span>
+
+  TIER  ID                          NAME                       STATUS
+  ────  ─────────────────────────   ───────────────────────    ────────
+   <span class="hi-good">I</span>    fire-bow-drill              Bow-drill fire making      <span class="hi-good">✓ ach.</span>
+   <span class="hi-good">I</span>    fire-flint-steel            Flint &amp; steel ignition     <span class="hi-good">✓ ach.</span>
+  <span class="hi-sel"> II   charcoal-mound              Earth-mound charcoal       ◐ active </span>
+   <span class="hi-good">II</span>   charcoal-retort             Retort charcoal (cleaner)  <span class="hi-faint">◯ ready</span>
+   <span class="hi-good">II</span>   small-forge                 Brake-drum forge           <span class="hi-good">✓ ach.</span>
+   <span class="hi-good">II</span>   lime-kiln                   Field lime kiln            <span class="hi-faint">◯ ready</span>
+   <span class="hi-warn">III</span>  steam-engine-toy            Pop-pop boat               <span class="hi-faint">◯ ready</span>
+   <span class="hi-warn">III</span>  windmill-savonius           Savonius vertical-axis     <span class="hi-faint">◯ ready</span>
+   <span class="hi-warn">IV</span>   alternator-rewind           Car alternator → genset    <span class="hi-warn">◐ active</span>
+   <span class="hi-warn">IV</span>   motor-from-scratch          Hand-wound DC motor        <span class="hi-bad">⚠ blocked</span>
+   <span class="hi-warn">IV</span>   crystal-radio               Galena crystal receiver    <span class="hi-faint">◯ ready</span>
+   <span class="hi-faint">V</span>    arduino-from-salvage        AVR from junk boards       <span class="hi-faint">◯ locked</span>
+
+  ── PEERS ──────────────────────────────────────────────────────────
+   <span class="hi-warn">II</span>   improved-charcoal-mound-v2  KILO-7 mod, +12% yield     <span class="hi-tag-peer">[✓ PEER]</span>
+   <span class="hi-warn">III</span>  micro-rocket-stove          ECHO-1 share               <span class="hi-tag-peer">[✓ PEER]</span>
+
+  ── DRAFTS (local) ─────────────────────────────────────────────────
+   <span class="hi-warn">IV</span>   wind-savonius-alt-mount     <span class="hi-dim">my session 04-23</span>             <span class="hi-tag-draft">[⚠ DRAFT]</span>
+
+</div>
+<div class="fkeys">[<span class="key">↑↓</span>] select  [<span class="key">Enter</span>] open  [<span class="key">N</span>] from design  [<span class="key">F</span>]ilter  [<span class="key">S</span>]hare  [<span class="key">/</span>] search  [<span class="key">q</span>]</div>
+</div>
+</div>
+
+<!-- ============== SCREEN: RECIPE CARD ============== -->
+<div class="terminal" data-screen="recipe-card">
+<span class="screen-label">RECIPE: charcoal-mound</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">REBUILD <span class="sep">›</span> RECIPES <span class="sep">›</span> <span class="here">charcoal-mound</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  <span class="hi-bold">EARTH-MOUND CHARCOAL</span>                              tier <span class="hi-good">II METAL</span>  ║
+  ║  <span class="hi-dim">id: charcoal-mound</span>      yields: <span class="hi-good">40-50% input mass</span>     <span class="hi-tag-canon">[✓ CANON]</span>  ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+
+  Time:        <span class="hi-good">4h active setup</span>  →  <span class="hi-warn">36-72h slow burn</span>  →  <span class="hi-good">2h teardown</span>
+  Difficulty:  <span class="hi-good">beginner</span>          Risk: <span class="hi-warn">medium</span>  (fire, smoke, hot earth)
+  Sources:     <span class="hi-tag-kb">[KB]</span> Appropedia/Charcoal_production
+               <span class="hi-tag-kb">[KB]</span> Wikipedia/Charcoal#Traditional_methods
+               <span class="hi-tag-kb">[KB]</span> FAO 41 — Simple technologies for charcoal making
+
+  ── PARTS ─────────────────────────────────────────────────────────────
+   <span class="hi-good">✓</span> hardwood (oak/ash/hickory) 100kg dry           <span class="hi-good">on hand</span>
+   <span class="hi-good">✓</span> earth/soil — 8cm cover                         <span class="hi-good">site OK</span>
+   <span class="hi-good">✓</span> water 20L emergency damping                    <span class="hi-good">stocked</span>
+   <span class="hi-good">✓</span> long-handled rake + shovel                     <span class="hi-good">on hand</span>
+
+  ── STRUCTURE ─────────────────────────────────────────────────────────
+
+                  ┌─ chimney hole (capped) ─┐
+                  │                         │
+            ┌─────▼─────────────────────────▼─────┐
+            │<span class="hi-faint">░░░░░░░░░░░░░░ EARTH 8cm ░░░░░░░░░░░░░</span>│
+            │  <span class="hi-warn">▓▓▓▓▓▓▓▓ split logs vertical ▓▓▓▓▓▓</span> │   1.5m
+            │  <span class="hi-warn">▓▓▓▓ packed tight, gaps minimal ▓▓▓</span> │   tall
+            │  <span class="hi-warn">▓▓▓▓▓ kindling chamber centre ▓▓▓▓▓</span> │
+            └──────────────────────────────────────┘
+                        diameter 2m
+                        air vents (8) around base
+
+  ── STEPS ─────────────────────────────────────────────────────────────
+   <span class="hi-good">[✓]</span>  1. Stack split hardwood vertically, 1.5m × 2m, packed tight
+   <span class="hi-good">[✓]</span>  2. Pierce chimney 10cm wide to ground level, centre
+   <span class="hi-good">[✓]</span>  3. Open 8 finger-width air vents at ground level
+   <span class="hi-warn">[ ]</span>  4. Cover with 8cm damp packed earth — chimney + vents OPEN
+   <span class="hi-warn">[ ]</span>  5. Drop hot embers + tinder down chimney; seal at thin blue smoke
+
+  ── BURN MONITORING ───────────────────────────────────────────────────
+  Walk perimeter every 30 min for 24-48h.  <span class="hi-bad">DO NOT LEAVE UNATTENDED.</span>
+   • <span class="hi-dim">white smoke from vent</span>  → close it (burning too fast)
+   • <span class="hi-dim">glowing red earth</span>     → cover immediately with more dirt
+   • <span class="hi-bad">flame visible</span>          → CLOSE EVERYTHING, dump water on breach
+
+  ── CROSS-REFS ────────────────────────────────────────────────────────
+  <span class="hi-info">MEDICAL › TRIAGE › BURNS</span>     <span class="hi-info">NEXT › small-forge</span>     <span class="hi-info">ATLAS › tier II</span>
+
+</div>
+<div class="fkeys">[<span class="key">jk</span>] step  [<span class="key">Space</span>] check  [<span class="key">L</span>]og entry  [<span class="key">P</span>] make project  [<span class="key">S</span>]hare  [<span class="key">q</span>] back</div>
+</div>
+</div>
+
+<!-- ============== SCREEN: SUBSTITUTE ============== -->
+<div class="terminal" data-screen="substitute">
+<span class="screen-label">S · SUBSTITUTE</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">REBUILD <span class="sep">›</span> <span class="here">SUBSTITUTE</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+  Need:  <span class="hi-bold">copper wire, enamelled, 0.5mm</span>
+  For:   crystal-radio coil  <span class="hi-dim">(auto-detected from PROJECTS)</span>
+
+  ── SUBSTITUTES ───────────────────────────────────────────────────────
+
+   <span class="hi-good">◆ 1</span>  <span class="hi-bold">SALVAGED COPPER WIRE</span>                              <span class="hi-good">[BEST]</span>
+        From:    motor windings, transformer windings, building
+                 cable (strip insulation), telephone cable
+        Caveat:  enamel may be damaged on salvaged windings;
+                 inspect for nicks; re-coat with shellac if used in coil
+        Source:  [<span class="hi-info">RECIPE: salvage-copper.md</span>] [<span class="hi-tag-kb">KB</span>: Appropedia/Wire]
+
+   <span class="hi-warn">◆ 2</span>  <span class="hi-bold">ALUMINIUM WIRE</span>                                    <span class="hi-warn">[PARTIAL]</span>
+        Works for: low-frequency power, NOT for RF coils
+        Caveat:  20% lower conductivity; oxidation at joints; do NOT
+                 use for crystal-radio coil — Q factor too low
+        Source:  [<span class="hi-tag-kb">KB</span>: ARRL Handbook Ch.20]
+
+   <span class="hi-bad">◆ 3</span>  <span class="hi-bold">STEEL WIRE WITH COPPER PLATING</span>                    <span class="hi-bad">[POOR]</span>
+        Found in: old fence wire, some cables
+        Caveat:  thin plating wears off; high resistance; only
+                 acceptable for one-shot prototypes
+
+  ── ADJACENT QUERIES ──────────────────────────────────────────────────
+
+   See also:  [<span class="hi-info">SUBSTITUTE: enamel coating</span>]  [<span class="hi-info">SUBSTITUTE: insulation</span>]
+              [<span class="hi-info">SUBSTITUTE: solder flux</span>]
+
+  ── SOURCE DISCIPLINE ─────────────────────────────────────────────────
+   3 results from <span class="hi-good">curated material database</span> · 0 LLM-generated
+   To request LLM speculation, press <span class="hi-info">[L]</span>
+
+</div>
+<div class="fkeys">[<span class="key">↑↓</span>] select  [<span class="key">Enter</span>] details  [<span class="key">P</span>] add to project  [<span class="key">L</span>] LLM  [<span class="key">/</span>] new search  [<span class="key">q</span>]</div>
+</div>
+</div>
+
+<!-- ============== SCREEN: DESIGN OUTPUT ============== -->
+<div class="terminal" data-screen="design">
+<span class="screen-label">D · DESIGN (LLM-assisted, KB-grounded)</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">REBUILD <span class="sep">›</span> DESIGN <span class="sep">›</span> <span class="here">OUTPUT</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+  Goal:  <span class="hi-bold">small wind generator from car alternator</span>
+  Mode:  decompose · Strict citation · 4/5 generations remaining today
+
+  ── BUILD PLAN ────────────────────────────────────────────────────────
+
+  <span class="hi-tag-kb">[KB]</span>  1. Source a salvaged car alternator (12V, 50A common type).
+         Most modern alternators are internally regulated; we want an
+         external-regulator type for control flexibility.
+         <span class="hi-dim">↳ cite: KB:Appropedia/Small_wind_systems §3.2</span>
+
+  <span class="hi-tag-kb">[KB]</span>  2. Strip the alternator's internal voltage regulator. The Y-wound
+         stator is fine as-is; we just bypass the field control.
+         <span class="hi-dim">↳ cite: KB:Otherpower.com/alternator_conversion (mirrored)</span>
+
+  <span class="hi-tag-gen">[GEN]</span> 3. Mount the alternator on a vertical shaft inside a Savonius
+         rotor (RECIPE: windmill-savonius). Stock pulley gives ~4:1
+         step-up which suits Savonius low RPM.
+         <span class="hi-dim">↳ derived: RECIPE:windmill-savonius + KB:alternator_curves</span>
+
+  <span class="hi-tag-gen">[GEN]</span> 4. Charge controller: 12V solar charge controller works for a
+         wind alternator if rated for ≥1.5× expected current. Add a
+         diversion load (resistive heater) to dump excess in high wind.
+         <span class="hi-dim">↳ derived: KB:Solar_charge_controller §5 + KB:Wind_dump_load</span>
+
+  <span class="hi-tag-spec">[SPEC]</span> 5. <span class="hi-warn">⚠</span> Estimated output: 100-300W in 8 m/s wind. Extrapolation from
+         generic alternator+rotor curves and may be off by 50% in either
+         direction. Verify with measurement.
+         <span class="hi-bad">↳ NOT cited from knowledgebase</span>
+
+  ── PARTS (joined to INVENTORY) ───────────────────────────────────────
+   <span class="hi-good">✓</span> alternator       have                                           1×
+   <span class="hi-good">✓</span> steel pipe 50mm  have                                           ok
+   <span class="hi-warn">◐</span> bearings         partial — only 1 of 2 needed                  1/2
+   <span class="hi-bad">◯</span> charge ctrl 30A  missing — see <span class="hi-info">SUBSTITUTE</span>                       0/1
+   <span class="hi-bad">◯</span> dump load        missing                                         0/1
+
+  <span class="hi-dim">─ Citation policy STRICT in effect. Speculative steps require
+    explicit confirmation before they enter a project plan. ─</span>
+
+</div>
+<div class="fkeys">[<span class="key">S</span>]ave draft  [<span class="key">P</span>] start project  [<span class="key">E</span>]xpand step  [<span class="key">B</span>]ack  [<span class="key">?</span>]  [<span class="key">q</span>]</div>
+</div>
+</div>
+
+<!-- ============== SCREEN: COMMS /builds BOARD ============== -->
+<div class="terminal" data-screen="comms-builds">
+<span class="screen-label">COMMS · /builds board</span>
+<div class="chrome">
+<div class="status-strip"><span class="l">▣ OVR-NODE-7  <span class="live">●</span> mesh:3  <span class="warn">⚡ 81%</span>  ☉ 26 APR 14:22</span><span class="c">OVERSEER</span><span class="r">QWEN2.5-7B  KB:21</span></div>
+<div class="breadcrumb">COMMS <span class="sep">›</span> BOARDS <span class="sep">›</span> <span class="here">/builds</span><span class="theme">PHOSPHOR</span></div>
+<div class="content">
+  TIME       FROM       SUBJECT                              KIND
+  ─────────  ─────────  ──────────────────────────────────   ──────────
+  04-25 14h  KILO-7     RE: alternator-rewind enamel sub      <span class="hi-info">SUBSTITUTE</span>
+  04-25 11h  TANGO-3    project snapshot: lime-kiln day 2     <span class="hi-warn">PROJECT</span>
+  04-24 19h  ECHO-1     <span class="hi-warn">⚠ DRAFT:</span> micro-hydro turbine          <span class="hi-tag-draft">DRAFT</span>
+  <span class="hi-sel">04-24 16h  KILO-7     ✓ PEER: improved-charcoal-mound v2    RECIPE    </span>
+  04-23 09h  --SYS--    ATLAS: TANGO-3 reached tier III       <span class="hi-mag">MILESTONE</span>
+  04-21 17h  KILO-7     project complete: charcoal-retort     <span class="hi-good">PROJECT</span>
+  04-20 14h  ECHO-1     anyone got a working still recipe?    <span class="hi-info">QUERY</span>
+
+  ── PREVIEW ───────────────────────────────────────────────────────────
+   FROM:     KILO-7  <span class="hi-dim">(key: 7c4a..91ef · 2 prior endorsements)</span>
+   SUBJECT:  improved-charcoal-mound v2
+   KIND:     <span class="hi-tag-peer">[✓ PEER]</span> recipe modification
+
+   "Mound modification — narrower base (1.6m), taller stack (1.8m),
+    two extra venturi vents. Result: ~12% higher charcoal yield, much
+    less ash. Tested 3× over 6 weeks. Diff against canonical attached.
+
+    Recommend importing for any forge-tier operator. Photos in next
+    digest sync."
+
+   Modifications diff:                    Mesh propagation:
+    + 2 vents at 1m height                 originated:  KILO-7
+    – chimney 12cm (was 10cm)              endorsed by: TANGO-3
+    + double earth cover (16cm)            hops seen:   2
+
+   <span class="hi-info">[I]</span> import to RECIPES › PEERS    <span class="hi-info">[D]</span> view full diff    <span class="hi-info">[R]</span> reply
+
+</div>
+<div class="fkeys">[<span class="key">↑↓</span>] select  [<span class="key">Enter</span>] open  [<span class="key">I</span>] import  [<span class="key">R</span>]eply  [<span class="key">N</span>]ew post  [<span class="key">B</span>]ack  [<span class="key">q</span>]</div>
+</div>
+</div>
+
+</div>
+
+<div class="foot">OVERSEER v3 · REBUILD MODULE PREVIEW · STATIC · NON-FUNCTIONAL</div>
+
+<script>
+// Screen switcher
+document.querySelectorAll('[data-screen]').forEach(btn => {
+  if (btn.tagName === 'BUTTON') {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.screen;
+      document.querySelectorAll('.preview-bar [data-screen]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.terminal').forEach(t => t.classList.remove('show'));
+      document.querySelector(`.terminal[data-screen="${target}"]`).classList.add('show');
+    });
+  }
+});
+
+// Viewport switcher
+document.querySelectorAll('[data-viewport]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-viewport]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.body.className = 'viewport-' + btn.dataset.viewport;
+  });
+});
+</script>
+
+</body>
+</html>

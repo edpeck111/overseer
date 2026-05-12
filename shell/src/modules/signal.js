@@ -11,6 +11,7 @@
 // Amber sub-theme (.screen-signal): --accent #ffb347
 
 import { el } from "../chrome/_dom.js";
+import { hwStatus, disabledBanner } from "./_hw.js";
 
 const SUBS = { W:"weather", A:"air", P:"aprs", M:"mesh", S:"scan", B:"bands" };
 
@@ -24,6 +25,7 @@ const local = {
   scan: null,
   bands: null,
   decoding: false,
+  hw: null,
 };
 
 export function mountSignal(root, store, ctx) {
@@ -43,6 +45,13 @@ export function mountSignal(root, store, ctx) {
       return t;
     }));
     body.replaceChildren();
+    // Show DISABLED banner for any synthetic hardware backends
+    if (local.hw && local.hw._synthetic) {
+      if (local.hw._synthetic.sdr)
+        body.appendChild(disabledBanner("SDR RADIO", "set OVERSEER_SDR=rtlsdr|hackrf|airspy"));
+      if (local.hw._synthetic.lora && local.sub === "mesh")
+        body.appendChild(disabledBanner("LoRa RADIO", "set OVERSEER_LORA=sx1262|sx1278|rylr998"));
+    }
     switch (local.sub) {
       case "weather": paintWeather(body); break;
       case "air":     paintAir(body);     break;
@@ -328,7 +337,7 @@ export function mountSignal(root, store, ctx) {
     c.append(grid);
   }
 
-  // ── keyboard ──────────────────────────────────────────────────────────────
+  // ── keyboard ──────────────────────────────────────────────────────────────────────────
   function onKey(e) {
     const k = e.key.toUpperCase();
     if (SUBS[k]) { local.sub = SUBS[k]; paint(); return; }
@@ -337,7 +346,7 @@ export function mountSignal(root, store, ctx) {
   screen.setAttribute("tabindex", "0");
   screen.addEventListener("keydown", onKey);
   screen.focus();
-  paint();
+  hwStatus().then(h => { local.hw = h; paint(); });
 
   return () => screen.removeEventListener("keydown", onKey);
 }

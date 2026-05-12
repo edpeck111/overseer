@@ -1,3 +1,11 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Overseer v3 — .gitignore
+#
+# Tracks: v3 redesign tree (server/, shell/, tools/, tests/, docs/) plus
+# the v2 compat shim (legacy_server.py, lora_*.py, crypto_utils.py).
+# Ignores: secrets, runtime data, build cruft, bundled offline archives.
+# ──────────────────────────────────────────────────────────────────────────
+
 # v2 entries (preserved)
 overseer.db
 overseer.db-*
@@ -7,21 +15,54 @@ zim/
 kiwix/
 .claude/
 
-# v3 additions
+# v3 additions — runtime / data
 .trash_local/
 /data/
 !shell/src/data/
-shell/dist/
-shell/public/dist/
-shell/node_modules/
-node_modules/
+tools/tiles/*.mbtiles
 *.sqlite
 *.sqlite-journal
+
+# v3 additions — caches and ephemeral
 .pytest_cache/
+pytest-cache-files-*/
 .ruff_cache/
 .pyright/
 .pre-commit-cache/
 
+# Build trees
+shell/dist/
+shell/node_modules/
+node_modules/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Build artefact aged copies (older build script kept these)
+*.gz
+*.gz.old
+*.old
+*.map.old
+shell/src/modules/*_test_fuse.tmp
+
+# Dev cruft
+# (one-off sprint commit helpers, stray 0-byte root file, personal notes)
+_git_commit_sprint*.bat
+/Overseer
+prepper_llm_project.md
+
+# Secrets
+.env
+.env.*
+
 # editor / OS
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
 # FUSE mount artefacts (Linux FUSE creates these as hidden temp files)
 .fuse_hidden*

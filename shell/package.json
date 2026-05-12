@@ -1,0 +1,19 @@
+{
+  "name": "overseer-shell",
+  "version": "3.0.0-dev0",
+  "private": true,
+  "type": "module",
+  "description": "Static client bundle for OVERSEER v3 — preloaded once, state deltas over the wire.",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "smoke": "node ../tools/smoke-shell.mjs"
+  },
+  "dependencies": {
+    "msgpackr": "^1.10.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "jsdom": "^24.1.0"
+  }
+}

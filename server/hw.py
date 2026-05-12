@@ -98,4 +98,27 @@ def any_real_hardware() -> bool:
     return any(v not in ("synthetic", "headless") for v in info.values())
 
 
+# ── REST endpoint ────────────────────────────────────────────────────────────
+
+from flask import Blueprint as _Blueprint, jsonify as _jsonify
+
+_hw_bp = _Blueprint("hw", __name__, url_prefix="/api/hw")
+
+
+@_hw_bp.route("")
+def _hw_status():
+    """Return all backend selections so the shell can show DISABLED banners."""
+    info = hw_info()
+    # Tag each as synthetic/real so JS doesn't need to know the backend names
+    info["_any_real"] = any_real_hardware()
+    info["_synthetic"] = {k: v in ("synthetic", "headless") for k, v in info.items()
+                          if not k.startswith("_")}
+    return _jsonify(info)
+
+
+def register(app) -> None:
+    if "hw" not in app.blueprints:
+        app.register_blueprint(_hw_bp)
+
+
 # -- end of module ------------------------------------------------------------

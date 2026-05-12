@@ -1,0 +1,36 @@
+/* === POWER MODULE === */
+
+.power-vitals { flex: 1; overflow-y: auto; padding: 8px; scrollbar-width: thin; scrollbar-color: var(--glow-dim) var(--bg); }
+
+.power-section { margin-bottom: 16px; }
+.power-section-title { color: var(--glow); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 6px; }
+.power-row { font-size: 0.85em; color: var(--glow-dim); padding: 2px 0; }
+.power-lbl { color: var(--glow); display: inline-block; min-width: 100px; }
+
+/* Bars */
+.power-bar-wrap { padding: 4px 0; }
+.power-bar { font-size: 0.85em; letter-spacing: 1px; }
+.power-bar-pct { color: var(--glow-dim); font-size: 0.8em; }
+
+/* Thermal colors */
+.power-cool { color: #33ff33; }
+.power-warm { color: #ffaa00; }
+.power-hot { color: #ff4444; }
+
+/* Dim text */
+.power-dim { color: var(--glow-dim); }
+
+/* Refresh timestamp */
+.power-refresh-ts {
+  text-align: center; color: var(--glow-dim); font-size: 0.7em;
+  letter-spacing: 1px; margin-top: 16px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* Manual refresh button */
+.power-refresh-btn {
+  display: block; margin: 8px auto 0; padding: 6px 16px;
+  background: none; border: 1px solid var(--border); color: var(--glow);
+  font-family: inherit; font-size: 0.75em; letter-spacing: 2px; cursor: pointer;
+}
+.power-refresh-btn:hover { border-color: var(--glow-dim); }

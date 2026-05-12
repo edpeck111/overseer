@@ -279,12 +279,366 @@ def overlays_list() -> list[dict]:
 
 
 # --------------------------------------------------------------------- #
+# GPS sources — Sprint 22.
+#
+# A GPS source produces ``Fix`` instances on demand. Three backends:
+#
+#   synthetic  — deterministic slow walk; default, no hardware required
+#   gpsd       — JSON over TCP localhost:2947 (the standard Linux GPS daemon)
+#   serial     — direct NMEA 0183 over a serial UART (USB GPS dongles)
+#
+# Selection is via ``hw.gps_backend()`` (env ``OVERSEER_GPS``). Real
+# backends lazy-import their I/O dependency; on bring-up failure they
+# attach a synthetic fallback and warn once. ``read_fix()`` is
+# non-blocking: it returns the most recent cached fix, or ``None`` if no
+# fix has been acquired yet.
+# --------------------------------------------------------------------- #
+
+from dataclasses import dataclass as _dataclass, field as _field
+
+
+@_dataclass
+class Fix:
+    """A single GPS position fix."""
+    lat: float
+    lon: float
+    alt_m: float | None = None
+    accuracy_m: float | None = None
+    sats: int = 0
+    fix_type: str = "2d"       # "no_fix" | "2d" | "3d"
+    at: float = 0.0
+
+    def to_wire(self) -> dict:
+        return {
+            "lat": round(self.lat, 6),
+            "lon": round(self.lon, 6),
+            "alt_m": None if self.alt_m is None else round(self.alt_m, 1),
+            "accuracy_m": None if self.accuracy_m is None else round(self.accuracy_m, 1),
+            "sats": int(self.sats),
+            "fix_type": self.fix_type,
+            "at": self.at,
+        }
+
+
+@_dataclass
+class SyntheticGps:
+    """Deterministic GPS walk for tests and headless dev.
+
+    Walks a small random distance per call around a configurable centre
+    (defaults to Manchester, UK). Seed for reproducibility.
+    """
+
+    centre_lat: float = 53.4808
+    centre_lon: float = -2.2426
+    radius_km: float = 0.5
+    seed: int | None = 42
+
+    _rng: 'object' = _field(init=False, repr=False)
+    _lat: float = _field(init=False, repr=False)
+    _lon: float = _field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        import random as _random
+        self._rng = _random.Random(self.seed if self.seed is not None else time.time_ns())
+        self._lat = self.centre_lat
+        self._lon = self.centre_lon
+
+    def read_fix(self) -> Fix | None:
+        # km → deg conversion at the current latitude.
+        step_km = self._rng.uniform(0, 0.01)  # ≤ 10 m per call
+        bearing = self._rng.uniform(0, 2 * math.pi)
+        dlat = (step_km / 110.574) * math.cos(bearing)
+        dlon = (step_km / (111.320 * math.cos(math.radians(self._lat)))) * math.sin(bearing)
+        self._lat += dlat
+        self._lon += dlon
+        # Snap back if we drift outside the radius.
+        if haversine_km(self._lat, self._lon, self.centre_lat, self.centre_lon) > self.radius_km:
+            self._lat, self._lon = self.centre_lat, self.centre_lon
+        return Fix(
+            lat=self._lat, lon=self._lon,
+            alt_m=80.0 + self._rng.uniform(-2.0, 2.0),
+            accuracy_m=self._rng.uniform(3.0, 7.0),
+            sats=self._rng.randint(8, 12),
+            fix_type="3d",
+            at=time.time(),
+        )
+
+
+@_dataclass
+class GpsdSource:
+    """Reads fixes from gpsd via the standard TCP JSON protocol.
+
+    Connects to host:port (default localhost:2947), issues
+    ``?WATCH={"enable":true,"json":true}``, and on each ``read_fix()``
+    drains any pending TPV objects, returning the newest as a Fix. If
+    no TPV has arrived, returns the cached last fix (or None).
+    """
+
+    host: str = "127.0.0.1"
+    port: int = 2947
+    connect_timeout: float = 1.0
+
+    _sock: 'object | None' = _field(default=None, init=False, repr=False)
+    _buf: bytes = _field(default=b"", init=False, repr=False)
+    _last: 'Fix | None' = _field(default=None, init=False, repr=False)
+    _fallback: 'SyntheticGps | None' = _field(default=None, init=False, repr=False)
+    last_error: str | None = _field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        try:
+            import socket as _socket
+            s = _socket.create_connection((self.host, self.port), timeout=self.connect_timeout)
+            s.sendall(b'?WATCH={"enable":true,"json":true};\n')
+            s.setblocking(False)
+            self._sock = s
+        except Exception as exc:  # noqa: BLE001
+            self._attach_fallback(f"gpsd connect {self.host}:{self.port} failed: {exc}")
+
+    def _attach_fallback(self, reason: str) -> None:
+        self.last_error = reason
+        import warnings
+        warnings.warn(f"OVERSEER GPS: {reason}; using synthetic fallback", stacklevel=2)
+        self._fallback = SyntheticGps()
+
+    def _drain(self) -> None:
+        if self._sock is None:
+            return
+        try:
+            while True:
+                chunk = self._sock.recv(4096)  # type: ignore[union-attr]
+                if not chunk:
+                    break
+                self._buf += chunk
+        except BlockingIOError:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            self._attach_fallback(f"gpsd recv failed: {exc}")
+            return
+        # Process complete lines.
+        while b"\n" in self._buf:
+            line, self._buf = self._buf.split(b"\n", 1)
+            self._consume_line(line)
+
+    def _consume_line(self, line: bytes) -> None:
+        line = line.strip()
+        if not line:
+            return
+        try:
+            obj = json.loads(line.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError:
+            return
+        if obj.get("class") != "TPV":
+            return
+        mode = obj.get("mode", 0)
+        fix_type = {0: "no_fix", 1: "no_fix", 2: "2d", 3: "3d"}.get(mode, "no_fix")
+        if fix_type == "no_fix" or "lat" not in obj or "lon" not in obj:
+            return
+        # gpsd TPV "time" is ISO-8601; fall back to wall-clock if absent.
+        self._last = Fix(
+            lat=float(obj["lat"]),
+            lon=float(obj["lon"]),
+            alt_m=obj.get("altMSL") or obj.get("alt"),
+            accuracy_m=obj.get("eph"),
+            sats=int(obj.get("nSat", 0)),
+            fix_type=fix_type,
+            at=time.time(),
+        )
+
+    def read_fix(self) -> Fix | None:
+        if self._fallback is not None:
+            return self._fallback.read_fix()
+        self._drain()
+        return self._last
+
+
+def _default_serial_device() -> str:
+    """Platform-appropriate default serial device for GPS dongles.
+
+    Linux / OPi5: /dev/ttyUSB0 (common u-blox / GlobalSat USB GPS).
+    Windows dev box: COM3 (PowerShell `Get-PnpDevice` to find yours).
+    macOS dev box: /dev/tty.usbserial-* (use `ls /dev/tty.*` to find).
+
+    Override with OVERSEER_GPS_DEVICE; the dispatcher in _gps() reads
+    it before instantiating SerialNmeaSource.
+    """
+    import sys
+    if sys.platform.startswith("win"):
+        return "COM3"
+    if sys.platform == "darwin":
+        return "/dev/tty.usbserial"
+    return "/dev/ttyUSB0"
+
+
+@_dataclass
+class SerialNmeaSource:
+    """Reads fixes from a serial GPS via NMEA 0183 ($GPRMC / $GPGGA).
+
+    Default device is platform-dependent (see ``_default_serial_device``);
+    9600 baud is the near-universal default for consumer GPS dongles
+    (u-blox NEO-6 / NEO-7 / NEO-M8, GlobalSat BU-353, Garmin GLO 2).
+
+    Override device + baud per deployment via OVERSEER_GPS_DEVICE and
+    OVERSEER_GPS_BAUD env vars (handled by the dispatcher in ``_gps()``).
+    """
+
+    device: str = _field(default_factory=_default_serial_device)
+    baud: int = 9600
+    open_timeout: float = 1.0
+
+    _port: 'object | None' = _field(default=None, init=False, repr=False)
+    _buf: str = _field(default="", init=False, repr=False)
+    _last: 'Fix | None' = _field(default=None, init=False, repr=False)
+    _sats_seen: int = _field(default=0, init=False, repr=False)
+    _fallback: 'SyntheticGps | None' = _field(default=None, init=False, repr=False)
+    last_error: str | None = _field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        try:
+            import serial  # type: ignore
+            self._port = serial.Serial(self.device, self.baud, timeout=0)
+        except ImportError as exc:
+            self._attach_fallback(f"pyserial unavailable: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            self._attach_fallback(f"serial open {self.device} failed: {exc}")
+
+    def _attach_fallback(self, reason: str) -> None:
+        self.last_error = reason
+        import warnings
+        warnings.warn(f"OVERSEER GPS: {reason}; using synthetic fallback", stacklevel=2)
+        self._fallback = SyntheticGps()
+
+    def _drain(self) -> None:
+        if self._port is None:
+            return
+        try:
+            chunk = self._port.read(4096)  # type: ignore[union-attr]
+        except Exception as exc:  # noqa: BLE001
+            self._attach_fallback(f"serial read failed: {exc}")
+            return
+        if not chunk:
+            return
+        try:
+            self._buf += chunk.decode("ascii", errors="replace")
+        except AttributeError:                # already str (tests with fakes)
+            self._buf += chunk
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            self._consume_line(line.strip())
+
+    def _consume_line(self, line: str) -> None:
+        if not line.startswith("$") or "," not in line:
+            return
+        # Strip optional checksum.
+        if "*" in line:
+            line = line.split("*", 1)[0]
+        parts = line.split(",")
+        head = parts[0]
+        try:
+            if head.endswith("GGA") and len(parts) >= 10:
+                lat = _nmea_dm_to_deg(parts[2], parts[3])
+                lon = _nmea_dm_to_deg(parts[4], parts[5])
+                if lat is None or lon is None:
+                    return
+                quality = int(parts[6] or 0)
+                if quality == 0:
+                    return
+                sats = int(parts[7] or 0)
+                alt = float(parts[9]) if parts[9] else None
+                self._sats_seen = sats
+                self._last = Fix(
+                    lat=lat, lon=lon, alt_m=alt, accuracy_m=None,
+                    sats=sats,
+                    fix_type="3d" if alt is not None else "2d",
+                    at=time.time(),
+                )
+            elif head.endswith("RMC") and len(parts) >= 7 and parts[2] == "A":
+                lat = _nmea_dm_to_deg(parts[3], parts[4])
+                lon = _nmea_dm_to_deg(parts[5], parts[6])
+                if lat is None or lon is None:
+                    return
+                self._last = Fix(
+                    lat=lat, lon=lon, alt_m=None, accuracy_m=None,
+                    sats=self._sats_seen,
+                    fix_type="2d",
+                    at=time.time(),
+                )
+        except (ValueError, IndexError):
+            return
+
+    def read_fix(self) -> Fix | None:
+        if self._fallback is not None:
+            return self._fallback.read_fix()
+        self._drain()
+        return self._last
+
+
+def _nmea_dm_to_deg(dm: str, hemi: str) -> float | None:
+    """Convert NMEA ddmm.mmmm + N/S/E/W into a signed decimal degree."""
+    if not dm or not hemi:
+        return None
+    try:
+        # Latitude is ddmm.mmmm (2-digit degrees); longitude is dddmm.mmmm.
+        dot = dm.find(".")
+        deg_digits = max(0, dot - 2) if dot >= 2 else len(dm) - 2
+        deg = float(dm[:deg_digits])
+        minutes = float(dm[deg_digits:])
+        val = deg + minutes / 60.0
+        if hemi in ("S", "W"):
+            val = -val
+        return val
+    except (ValueError, IndexError):
+        return None
+
+
+# Module-level selector: instantiated once at first use.
+_gps_source: 'object | None' = None
+
+
+def _gps() -> object:
+    global _gps_source
+    if _gps_source is not None:
+        return _gps_source
+    from server import hw
+    backend = hw.gps_backend()
+    if backend == "gpsd":
+        _gps_source = GpsdSource()
+    elif backend == "serial":
+        device = os.environ.get("OVERSEER_GPS_DEVICE", "/dev/ttyUSB0")
+        baud = int(os.environ.get("OVERSEER_GPS_BAUD", "9600"))
+        _gps_source = SerialNmeaSource(device=device, baud=baud)
+    else:
+        _gps_source = SyntheticGps()
+    return _gps_source
+
+
+def gps_fix() -> dict | None:
+    """Return the current GPS fix on the wire, or None if no fix yet."""
+    fix = _gps().read_fix()  # type: ignore[attr-defined]
+    return fix.to_wire() if fix is not None else None
+
+
+def reset_gps_for_tests(source: object | None = None) -> None:
+    """Reset the GPS source. Used by tests; injecting a source skips selection."""
+    global _gps_source
+    _gps_source = source
+
+
+# --------------------------------------------------------------------- #
 # REST blueprint
 # --------------------------------------------------------------------- #
 
-from flask import Blueprint, jsonify, request
+import sqlite3 as _sqlite3
+
+from flask import Blueprint, jsonify, request, Response as _Response
 
 nav_bp = Blueprint("navigation", __name__, url_prefix="/api/n")
+
+# Path to the MBTiles file (env override for Overseer Prime)
+_MBTILES = os.environ.get(
+    "MBTILES_PATH",
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "..", "..", "tools", "tiles", "uk.mbtiles")),
+)
 
 
 @nav_bp.route("/waypoints", methods=["GET"])
@@ -377,6 +731,61 @@ def _ovs(): return jsonify(overlays_list())
 def _ov_new():
     b = request.get_json(silent=True) or {}
     return jsonify({"id": overlay_new(b["name"], b["kind"], b.get("geo_json", {}), b.get("color", "#ffb849"))})
+
+
+@nav_bp.route("/gps/fix")
+def _gps_fix():
+    """Current GPS fix, or 204 No Content if no fix is available yet."""
+    fix = gps_fix()
+    if fix is None:
+        return "", 204
+    return jsonify(fix)
+
+
+@nav_bp.route("/tiles/status")
+def _tiles_status():
+    """Reports whether the MBTiles file exists and how many tiles it holds."""
+    if not os.path.exists(_MBTILES):
+        return jsonify({"available": False, "path": _MBTILES, "tiles": 0})
+    try:
+        db = _sqlite3.connect(_MBTILES)
+        n = db.execute("SELECT COUNT(*) FROM tiles").fetchone()[0]
+        meta = {r[0]: r[1] for r in db.execute("SELECT name,value FROM metadata")}
+        db.close()
+        return jsonify({
+            "available": True, "tiles": n,
+            "minzoom": meta.get("minzoom"), "maxzoom": meta.get("maxzoom"),
+            "bounds": meta.get("bounds"),
+        })
+    except Exception as exc:
+        return jsonify({"available": False, "error": str(exc)}), 500
+
+
+@nav_bp.route("/tiles/<int:z>/<int:x>/<int:y>")
+def _tile(z, x, y):
+    """Serve a single PNG tile from the MBTiles SQLite file.
+    MBTiles stores TMS y (flipped from XYZ web convention).
+    """
+    if not os.path.exists(_MBTILES):
+        return "", 404
+    tms_y = (2 ** z - 1) - y
+    try:
+        db = _sqlite3.connect(_MBTILES)
+        row = db.execute(
+            "SELECT tile_data FROM tiles "
+            "WHERE zoom_level=? AND tile_column=? AND tile_row=?",
+            (z, x, tms_y),
+        ).fetchone()
+        db.close()
+    except Exception:
+        return "", 500
+    if row is None:
+        return "", 404
+    return _Response(
+        row[0],
+        mimetype="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 def register(app):

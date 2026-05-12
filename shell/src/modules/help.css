@@ -1,0 +1,51 @@
+/* HELP & XTRAS module -- hotkeys, commands, about, lore
+ * Cyan info sub-theme: --accent #4dd9e0, scoped to .screen-help */
+
+.screen-help {
+  --accent:      #4dd9e0;
+  --accent-dim:  #2a8f96;
+  --accent-glow: rgba(77,217,224,0.12);
+}
+
+.hlp-section-title {
+  padding: 8px 8px 4px;
+  color: var(--accent); letter-spacing: 0.12em; font-size: 0.88em;
+  border-bottom: 1px solid var(--rule);
+}
+.hlp-group-hdr {
+  padding: 6px 8px 2px; font-size: 0.8em; letter-spacing: 0.1em;
+}
+.hlp-accent { color: var(--accent); }
+.hlp-dim    { color: var(--fg-dim); }
+.hlp-mono   { font-family: var(--font-mono); }
+
+/* Hotkey grid */
+.hlp-hotkey-grid { display: flex; flex-direction: column; padding: 0; }
+.hlp-hotkey-row  {
+  display: grid; grid-template-columns: 5ch 18ch 1fr;
+  gap: 4px; padding: 3px 8px;
+  border-bottom: 1px solid var(--rule-subtle, rgba(255,255,255,0.03));
+  font-size: 0.88em; align-items: center;
+}
+.hlp-key { font-size: 0.9em; }
+.hlp-mod-name { letter-spacing: 0.06em; }
+.hlp-mod-desc { font-size: 0.85em; }
+
+/* Command grid */
+.hlp-cmd-grid { display: flex; flex-direction: column; padding: 4px 0; }
+.hlp-cmd-row  {
+  display: grid; grid-template-columns: 22ch 1fr;
+  gap: 8px; padding: 4px 8px;
+  border-bottom: 1px solid var(--rule-subtle, rgba(255,255,255,0.03));
+  font-size: 0.88em;
+}
+.hlp-cmd-name { font-size: 0.9em; }
+.hlp-cmd-desc { font-size: 0.85em; }
+
+/* About / lore text blocks */
+.hlp-text-box {
+  padding: 10px 12px; font-family: var(--font-mono);
+  font-size: 0.85em; line-height: 1.6;
+  white-space: pre-wrap; color: var(--fg); margin: 0;
+}
+.hlp-lore { color: var(--fg-dim); font-style: italic; }

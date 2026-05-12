@@ -1,0 +1,12 @@
+{
+  "uptime_s": 1480400,
+  "model": "qwen2.5:7b-instruct-q4_K_M",
+  "archives": [
+    {"key": "mdwiki_en_all_maxi", "label": "Medical Wikipedia", "size_gb": 3.4, "articles": 75000},
+    {"key": "wikipedia_en_all_nopic", "label": "Wikipedia (No Images)", "size_gb": 48.2, "articles": 6800000},
+    {"key": "wikem_en_all", "label": "WikEM", "size_gb": 0.6, "articles": 12000}
+  ],
+  "day_counter": 417,
+  "wall_time_local": "23:47",
+  "weather_short": "overcast · 11°C"
+}

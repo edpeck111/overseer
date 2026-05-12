@@ -1,0 +1,12 @@
+[
+  {"id": 1,  "from": "BRAVO-2",   "subj": "Re: rendezvous shift — copy that", "when": 1714086840, "flags": 1},
+  {"id": 2,  "from": "CHARLIE-7", "subj": "Cache-7 inventory update — water down 40%", "when": 1714083200, "flags": 0},
+  {"id": 3,  "from": "ECHO-3",    "subj": "[BOARD/INTEL] vehicle traffic NW road", "when": 1714069200, "flags": 0},
+  {"id": 4,  "from": "BRAVO-2",   "subj": "weekly status / nominal", "when": 1714000000, "flags": 0},
+  {"id": 5,  "from": "DELTA-4",   "subj": "[BOARD/SWAP] surplus iodine, need .22LR", "when": 1713913600, "flags": 0},
+  {"id": 6,  "from": "CHARLIE-7", "subj": "Re: spring-fed source coordinates", "when": 1713827200, "flags": 0},
+  {"id": 7,  "from": "ECHO-3",    "subj": "storm front incoming — batten down", "when": 1713740800, "flags": 0},
+  {"id": 8,  "from": "OVERSEER",  "subj": "[SYSTEM] battery cycle test passed", "when": 1713654400, "flags": 0},
+  {"id": 9,  "from": "DELTA-4",   "subj": "found a working ham xcvr — yagi specs?", "when": 1713568000, "flags": 0},
+  {"id": 10, "from": "BRAVO-2",   "subj": "long-range comms test next 0600", "when": 1713481600, "flags": 0}
+]

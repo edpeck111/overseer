@@ -16,6 +16,7 @@ from server.modules import power as _power
 from server.modules import signal_ as _signal
 from server.modules import recreation as _recreation
 from server.modules import system_ as _system
+from server import hw as _hw
 
 _ws.register(app)
 _omp_server.register(app)
@@ -31,6 +32,7 @@ _timeline.register(app)
 _signal.register(app)
 _recreation.register(app)
 _system.register(app)
+_hw.register(app)
 
 __all__ = ["app"]
 

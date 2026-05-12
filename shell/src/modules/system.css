@@ -1,0 +1,74 @@
+/* SYSTEM module -- admin/sysinfo/settings/backup
+ * Red admin sub-theme: --accent #ff6b6b, scoped to .screen-system */
+
+.screen-system {
+  --accent:      #ff6b6b;
+  --accent-dim:  #cc3333;
+  --accent-glow: rgba(255,107,107,0.12);
+}
+
+.sys-hdr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-bottom: 1px solid var(--rule); flex-wrap: wrap;
+}
+.sys-title {
+  color: var(--accent); letter-spacing: 0.12em; font-size: 0.88em; flex: 1;
+}
+.sys-empty { padding: 16px 8px; color: var(--fg-dim); font-size: 0.9em; }
+.sys-accent { color: var(--accent); }
+.sys-dim    { color: var(--fg-dim); }
+.sys-mono   { font-family: var(--font-mono); }
+.sys-ok     { color: #6dcc6d; }
+.sys-err    { color: #ff6b6b; }
+.sys-warn   { color: #ffb347; }
+
+/* KV grid (INFO + SETTINGS) */
+.sys-kv-grid { display: flex; flex-direction: column; padding: 4px 0; }
+.sys-kv-row  {
+  display: grid; grid-template-columns: 14ch 1fr auto;
+  gap: 4px; padding: 4px 8px;
+  border-bottom: 1px solid var(--rule-subtle, rgba(255,255,255,0.04));
+  font-size: 0.88em; align-items: center;
+}
+.sys-kv-key  { color: var(--fg-dim); letter-spacing: 0.08em; }
+.sys-kv-val  { color: var(--fg); }
+.sys-edit-btn { padding: 1px 5px; font-size: 0.78em; }
+
+/* USER grid */
+.sys-user-grid { display: flex; flex-direction: column; padding: 2px 0; }
+.sys-user-row  {
+  display: grid;
+  grid-template-columns: 12ch 12ch 10ch 10ch 3ch;
+  gap: 4px; padding: 3px 8px;
+  border-bottom: 1px solid var(--rule-subtle, rgba(255,255,255,0.04));
+  font-size: 0.88em;
+}
+.sys-user-hdr { color: var(--fg-dim); font-size: 0.82em; letter-spacing: 0.1em; }
+
+/* Add user form */
+.sys-add-form {
+  display: flex; gap: 6px; padding: 8px;
+  border-top: 1px solid var(--rule); align-items: center; flex-wrap: wrap;
+}
+.sys-inp {
+  background: var(--bg-panel, #111); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 6px;
+  font-family: var(--font-mono); font-size: 0.85em; width: 10ch;
+}
+.sys-sel {
+  background: var(--bg-panel, #111); color: var(--fg);
+  border: 1px solid var(--rule); padding: 3px 4px;
+  font-size: 0.85em;
+}
+
+/* BACKUP rows */
+.sys-backup-row {
+  display: flex; gap: 10px; align-items: center;
+  padding: 6px 8px; border-bottom: 1px solid var(--rule);
+  font-size: 0.88em; flex-wrap: wrap;
+}
+.sys-bk-target { color: var(--accent); min-width: 12ch; }
+.sys-bk-status { min-width: 8ch; letter-spacing: 0.08em; }
+.sys-bk-size   { min-width: 8ch; }
+.sys-bk-path   { flex: 1; font-size: 0.8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sys-trigger-btn { margin-left: auto; }

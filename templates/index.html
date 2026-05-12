@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>O.V.E.R.S.E.E.R.</title>
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+<link rel="stylesheet" href="/static/css/core.css">
+<link rel="stylesheet" href="/static/css/knowledge.css">
+<link rel="stylesheet" href="/static/css/comms.css">
+<link rel="stylesheet" href="/static/css/system.css">
+<link rel="stylesheet" href="/static/css/medical.css">
+<link rel="stylesheet" href="/static/css/maps.css">
+<link rel="stylesheet" href="/static/css/power.css">
+</head>
+<body>
+<!-- SPLASH / BOOT SCREEN -->
+<div id="splash" onclick="startBoot()">
+  <div style="width:100%; max-width:700px; padding:20px;">
+    <div class="splash-content" id="splash-title" style="text-align:center; margin-bottom:24px;">
+      <div class="title" style="margin-bottom:16px;">OVERSEER</div>
+      <div style="color:var(--glow-dim);font-size:0.7em;letter-spacing:2px;">
+        Offline Vault of Essential Records for<br>Survival, Emergency &amp; Endurance Response
+      </div>
+    </div>
+    <div id="splash-boot" style="display:none; font-size:0.8em; line-height:1.6;">
+      <span id="boot-output" class="output-area" style="white-space:pre-wrap;"></span>
+    </div>
+    <div id="splash-prompt" style="text-align:center; margin-top:20px;">
+      <div style="color:var(--glow);font-size:0.9em;animation:blink 1.2s step-end infinite; cursor:pointer;">
+        [ CLICK TO INITIALIZE ]
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HOME DASHBOARD -->
+<div id="dashboard" style="display:none;">
+  <div class="dashboard-screen">
+    <div class="dash-header">
+      <div class="title">OVERSEER</div>
+      <div class="subtitle">MISSION CONTROL</div>
+      <div class="dash-date" id="dash-date"></div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="dash-card">
+        <div class="dash-card-title">SYSTEM STATUS</div>
+        <div class="dash-card-value" id="dash-sys-status">---</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">AI ENGINE</div>
+        <div class="dash-card-value" id="dash-ai-status">---</div>
+        <div class="dash-card-detail" id="dash-ai-detail"></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">KNOWLEDGE BASE</div>
+        <div class="dash-card-value" id="dash-kb-status">---</div>
+        <div class="dash-card-detail" id="dash-kb-detail"></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">COMMS</div>
+        <div class="dash-card-value" id="dash-comms-status">---</div>
+        <div class="dash-card-detail" id="dash-comms-detail"></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">LAST QUERY</div>
+        <div class="dash-card-value" id="dash-last-query">---</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">UPTIME</div>
+        <div class="dash-card-value" id="dash-day-count">---</div>
+      </div>
+    </div>
+
+    <div class="dash-enter">
+      <div class="dash-enter-btn" onclick="enterTerminal()">[ ENTER OVERSEER ]</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN TERMINAL -->
+<div class="screen" id="terminal" data-module="knowledge" style="display:none;">
+  <div class="header">
+    <div class="title">OVERSEER</div>
+    <div class="subtitle">Offline Vault of Essential Records for Survival, Emergency &amp; Endurance Response</div>
+  </div>
+
+  <!-- MODULE NAVIGATION -->
+  <div class="module-nav">
+    <button class="active" onclick="switchModule('knowledge')" id="nav-knowledge">
+      <span class="nav-indicator"></span>KNOWLEDGE
+    </button>
+    <button onclick="switchModule('comms')" id="nav-comms">
+      <span class="nav-indicator"></span>COMMS
+    </button>
+    <button onclick="switchModule('medical')" id="nav-medical">
+      <span class="nav-indicator"></span>MEDICAL
+    </button>
+    <button onclick="switchModule('maps')" id="nav-maps">
+      <span class="nav-indicator"></span>MAPS
+    </button>
+    <button onclick="switchModule('power')" id="nav-power">
+      <span class="nav-indicator"></span>POWER
+    </button>
+    <button onclick="switchModule('system')" id="nav-system">
+      <span class="nav-indicator"></span>SYSTEM
+    </button>
+  </div>
+
+  <div class="status-bar">
+    <span>SYS: <span class="online" id="sysStatus">BOOTING</span></span>
+    <span id="statusModel">MODEL: ---</span>
+    <span id="statusRam">RAM: ---</span>
+    <span id="statusKb">KB: ---</span>
+    <span id="clock"></span>
+    <span class="sound-toggle" onclick="toggleContrast()" id="contrastToggle" title="High contrast mode">[HI-CON]</span>
+  </div>
+
+  <!-- ==================== KNOWLEDGE MODULE ==================== -->
+  <div id="module-knowledge" class="module-panel active">
+    <div class="knowledge-tabs">
+      <button class="active" onclick="switchKnowledgeTab('chat')" id="ktab-chat">CHAT</button>
+      <button onclick="switchKnowledgeTab('library')" id="ktab-library">LIBRARY</button>
+    </div>
+
+    <!-- CHAT SUB-PANEL -->
+    <div id="knowledge-chat" class="chat-panel active">
+      <div id="chat"></div>
+      <div class="input-area">
+        <div class="input-row">
+          <span class="prompt-symbol">&gt;_</span>
+          <input type="text" id="input" placeholder="ENTER QUERY..." autocomplete="off" spellcheck="false">
+          <button id="send" onclick="send()">TRANSMIT</button>
+        </div>
+        <div class="toggle-row">
+          <input type="checkbox" id="rag" checked>
+          <label for="rag">[KB AUG]</label>
+          <span style="flex:1;"></span>
+          <span class="sound-toggle" onclick="clearChat()">[CLR]</span>
+          <span class="sound-toggle" onclick="exportChat()">[EXPORT]</span>
+          <span class="sound-toggle" onclick="toggleSound()" id="soundToggle">[SND:ON]</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIBRARY SUB-PANEL -->
+    <div id="knowledge-library" class="library-panel">
+      <div class="library-search-bar">
+        <input type="text" id="library-search" placeholder="SEARCH ARCHIVES..." autocomplete="off" spellcheck="false">
+        <button onclick="librarySearch()">SEARCH</button>
+        <button onclick="showBookList()" title="Browse volumes" style="letter-spacing:0;">BROWSE</button>
+      </div>
+      <div id="library-content" class="library-results">
+        <div class="library-empty">
+          SEARCH to find articles across all archives, or<br>
+          BROWSE to explore individual volumes.<br><br>
+          All content is available offline from the loaded ZIM volumes.
+        </div>
+      </div>
+
+      <!-- Article reader (hidden until an article is selected) -->
+      <div id="article-reader" class="article-reader">
+        <div class="article-header">
+          <button class="article-back" onclick="closeArticle()">&lt; BACK</button>
+          <span class="article-title-bar" id="article-title">---</span>
+        </div>
+        <div class="article-body-wrap">
+          <div class="article-body" id="article-body"></div>
+        </div>
+        <div id="article-links" class="article-links-panel" style="display:none;">
+          <div class="article-links-handle" id="article-links-handle">
+            <span class="handle-grip">&#8801; LINKED ARTICLES</span>
+          </div>
+          <div class="article-links-body" id="article-links-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== COMMS MODULE ==================== -->
+  <div id="module-comms" class="module-panel">
+    <!-- User selection screen -->
+    <div id="comms-login" class="comms-login">
+      <div class="comms-login-label">IDENTIFY OPERATOR</div>
+      <div id="comms-user-list" class="comms-user-list">
+        Loading operators...
+      </div>
+    </div>
+
+    <!-- Main comms interface (after login) -->
+    <div id="comms-interface" class="comms-interface">
+      <div class="comms-topbar">
+        <span>OPERATOR:</span>
+        <span class="comms-identity" id="comms-identity">---</span>
+        <span class="comms-logout" onclick="commsLogout()">[DISCONNECT]</span>
+      </div>
+      <div class="comms-tabs">
+        <button class="active" onclick="switchCommsTab('inbox')" id="ctab-inbox">INBOX<span id="comms-badge" class="comms-badge" style="display:none;"></span></button>
+        <button onclick="switchCommsTab('sent')" id="ctab-sent">SENT</button>
+        <button onclick="switchCommsTab('compose')" id="ctab-compose">COMPOSE</button>
+      </div>
+
+      <!-- Inbox -->
+      <div id="comms-inbox" class="comms-content" style="display:block;"></div>
+
+      <!-- Sent -->
+      <div id="comms-sent" class="comms-content" style="display:none;"></div>
+
+      <!-- Compose -->
+      <div id="comms-compose" class="comms-compose">
+        <select id="compose-to"></select>
+        <input type="text" id="compose-subject" placeholder="SUBJECT (optional)" autocomplete="off" spellcheck="false">
+        <textarea id="compose-body" placeholder="MESSAGE BODY..."></textarea>
+        <div style="display:flex; gap:8px; flex-shrink:0;">
+          <button class="admin-btn" onclick="commsSend()">TRANSMIT</button>
+          <div class="admin-msg" id="compose-msg"></div>
+        </div>
+      </div>
+
+      <!-- Message view -->
+      <div id="comms-msg-view" class="msg-view">
+        <div class="msg-view-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="article-back" onclick="closeMsgView()">&lt; BACK</button>
+            <span id="msg-view-subject" style="color:var(--glow-bright);font-size:0.85em;"></span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+            <span style="font-size:0.7em; color:var(--glow-dim);" id="msg-view-meta"></span>
+            <span style="margin-left:auto; display:flex; gap:4px;" id="msg-view-actions"></span>
+          </div>
+        </div>
+        <div class="msg-view-body" id="msg-view-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MEDICAL TRIAGE MODULE ==================== -->
+  <div id="module-medical" class="module-panel">
+    <!-- Category selection -->
+    <div class="triage-categories">
+      <div class="triage-header">
+        <div class="triage-header-title">FIELD MEDICAL TRIAGE</div>
+        <div class="triage-header-sub">Guided emergency response — no AI required</div>
+      </div>
+      <div class="triage-grid">
+        <div class="triage-cat-btn" onclick="triageStart('bleeding')">
+          <span class="cat-icon">+</span>
+          <span class="cat-label">BLEEDING</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('burns')">
+          <span class="cat-icon">~</span>
+          <span class="cat-label">BURNS</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('choking')">
+          <span class="cat-icon">!</span>
+          <span class="cat-label">CHOKING</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('fractures')">
+          <span class="cat-icon">/</span>
+          <span class="cat-label">FRACTURES</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('dehydration')">
+          <span class="cat-icon">~</span>
+          <span class="cat-label">DEHYDRATION</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('hypothermia')">
+          <span class="cat-icon">*</span>
+          <span class="cat-label">HYPOTHERMIA</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('heatillness')">
+          <span class="cat-icon">^</span>
+          <span class="cat-label">HEAT ILLNESS</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('allergic')">
+          <span class="cat-icon">!</span>
+          <span class="cat-label">ALLERGIC RXNS</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('shock')">
+          <span class="cat-icon">!</span>
+          <span class="cat-label">SHOCK</span>
+        </div>
+        <div class="triage-cat-btn" onclick="triageStart('wounds')">
+          <span class="cat-icon">x</span>
+          <span class="cat-label">WOUND CARE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Triage flow (question/action cards) -->
+    <div class="triage-flow">
+      <div class="triage-flow-header">
+        <button class="triage-back" onclick="triageBack()">&lt; BACK</button>
+        <span class="triage-flow-title" id="triage-flow-title">---</span>
+      </div>
+      <div class="triage-breadcrumb" id="triage-breadcrumb"></div>
+      <div class="triage-flow-body" id="triage-flow-body"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MAPS MODULE ==================== -->
+  <div id="module-maps" class="module-panel">
+    <div class="maps-tabs">
+      <button class="maps-tab-btn active" onclick="switchMapsTab('waypoints')" id="mtab-waypoints">WAYPOINTS</button>
+      <button class="maps-tab-btn" onclick="switchMapsTab('navigate')" id="mtab-navigate">NAVIGATE</button>
+      <button class="maps-tab-btn" onclick="switchMapsTab('map')" id="mtab-map">MAP</button>
+    </div>
+
+    <!-- WAYPOINTS PANEL -->
+    <div id="maps-waypoints-panel" class="maps-panel" style="display:flex;">
+      <div class="maps-add-bar">
+        <button class="admin-btn" onclick="mapsShowAddForm()">+ ADD WAYPOINT</button>
+        <button class="admin-btn" onclick="mapsLoadWaypoints()">REFRESH</button>
+      </div>
+
+      <div id="maps-add-form" class="maps-add-form" style="display:none;">
+        <input type="text" id="wp-name" placeholder="WAYPOINT NAME" autocomplete="off" spellcheck="false">
+        <select id="wp-category">
+          <option value="camp">CAMP</option>
+          <option value="water">WATER</option>
+          <option value="cache">CACHE</option>
+          <option value="hazard">HAZARD</option>
+          <option value="rally">RALLY POINT</option>
+          <option value="medical">MEDICAL</option>
+          <option value="comms">COMMS</option>
+          <option value="general" selected>GENERAL</option>
+        </select>
+        <div class="maps-coord-row">
+          <input type="text" id="wp-lat" placeholder="LATITUDE" autocomplete="off">
+          <input type="text" id="wp-lon" placeholder="LONGITUDE" autocomplete="off">
+        </div>
+        <textarea id="wp-notes" placeholder="NOTES (optional)"></textarea>
+        <div class="maps-add-actions">
+          <button class="admin-btn" onclick="mapsAddWaypoint()">SAVE</button>
+          <button class="admin-btn" onclick="mapsGetPosition()">GPS POSITION</button>
+          <span class="maps-gps-msg" id="maps-gps-msg"></span>
+        </div>
+        <div class="maps-add-msg" id="maps-add-msg"></div>
+      </div>
+
+      <div id="maps-wp-list" class="maps-wp-list">Loading waypoints...</div>
+    </div>
+
+    <!-- NAVIGATE PANEL -->
+    <div id="maps-navigate-panel" class="maps-panel" style="display:none;">
+      <div class="maps-nav-scroll">
+        <div class="maps-nav-section">
+          <div class="maps-nav-section-title">FROM</div>
+          <div class="maps-nav-coord-inputs">
+            <select id="nav-from-select" onchange="mapsNavSelectFrom()"><option value="">-- MANUAL --</option></select>
+          </div>
+          <div class="maps-nav-coord-inputs" style="margin-top:4px;">
+            <input type="text" id="nav-lat1" placeholder="LATITUDE">
+            <input type="text" id="nav-lon1" placeholder="LONGITUDE">
+            <button class="admin-btn" onclick="mapsNavGetPos('1')" style="flex-shrink:0;">GPS</button>
+          </div>
+        </div>
+
+        <div class="maps-nav-section">
+          <div class="maps-nav-section-title">TO</div>
+          <div class="maps-nav-coord-inputs">
+            <select id="nav-to-select" onchange="mapsNavSelectTo()"><option value="">-- MANUAL --</option></select>
+          </div>
+          <div class="maps-nav-coord-inputs" style="margin-top:4px;">
+            <input type="text" id="nav-lat2" placeholder="LATITUDE">
+            <input type="text" id="nav-lon2" placeholder="LONGITUDE">
+            <button class="admin-btn" onclick="mapsNavGetPos('2')" style="flex-shrink:0;">GPS</button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center; padding:8px 0;">
+          <button class="admin-btn" onclick="mapsCalculateRoute()">CALCULATE</button>
+          <span class="maps-nav-msg" id="maps-nav-msg"></span>
+        </div>
+
+        <div id="maps-nav-result"></div>
+      </div>
+    </div>
+
+    <!-- MAP VIEW PANEL -->
+    <div id="maps-view-panel" class="maps-view-panel" style="display:none;">
+      <div class="maps-map-container">
+        <div class="maps-map-status" id="maps-map-status">TAP TO LOAD MAP</div>
+        <div id="maps-leaflet-map"></div>
+      </div>
+      <div class="maps-map-toolbar">
+        <button class="admin-btn" onclick="mapsMapLocate()">LOCATE</button>
+        <button class="admin-btn" onclick="if(leafletMap){leafletMap.setView([54.5,-2.0],6);}">UK VIEW</button>
+        <span class="maps-map-coord" id="maps-map-coord">RIGHT-CLICK MAP TO ADD WAYPOINT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== POWER MODULE ==================== -->
+  <div id="module-power" class="module-panel">
+    <div class="power-vitals" id="power-vitals">
+      <div class="power-section">
+        <div class="power-section-title">--- LOADING ---</div>
+        <div class="power-row">Querying host system...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SYSTEM MODULE ==================== -->
+  <div id="module-system" class="module-panel">
+    <div class="knowledge-tabs">
+      <button class="active" onclick="switchSystemTab('status')" id="systab-status">STATUS</button>
+      <button onclick="switchSystemTab('admin')" id="systab-admin">ADMIN</button>
+    </div>
+
+    <!-- STATUS SUB-PANEL -->
+    <div id="system-status" class="chat-panel active">
+      <div id="system-info">
+        <div class="sys-section">
+          <div class="sys-section-title">--- SYSTEM STATUS ---</div>
+          <div id="sys-core-info">Loading system information...</div>
+        </div>
+        <div class="sys-section">
+          <div class="sys-section-title">--- LOADED MODELS ---</div>
+          <div id="sys-models">Scanning...</div>
+        </div>
+        <div class="sys-section">
+          <div class="sys-section-title">--- KNOWLEDGE ARCHIVES ---</div>
+          <div id="sys-archives">Indexing...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN SUB-PANEL -->
+    <div id="system-admin" class="library-panel">
+      <!-- PIN entry (shown when locked) -->
+      <div id="admin-pin-screen" class="pin-overlay">
+        <div class="pin-label">ADMIN AUTHENTICATION</div>
+        <div class="pin-display" id="pin-display"></div>
+        <div class="pin-pad">
+          <div class="pin-btn" onclick="pinPress('1')">1</div>
+          <div class="pin-btn" onclick="pinPress('2')">2</div>
+          <div class="pin-btn" onclick="pinPress('3')">3</div>
+          <div class="pin-btn" onclick="pinPress('4')">4</div>
+          <div class="pin-btn" onclick="pinPress('5')">5</div>
+          <div class="pin-btn" onclick="pinPress('6')">6</div>
+          <div class="pin-btn" onclick="pinPress('7')">7</div>
+          <div class="pin-btn" onclick="pinPress('8')">8</div>
+          <div class="pin-btn" onclick="pinPress('9')">9</div>
+          <div class="pin-btn" onclick="pinClear()">CLR</div>
+          <div class="pin-btn" onclick="pinPress('0')">0</div>
+          <div class="pin-btn" onclick="pinSubmit()">ENT</div>
+        </div>
+        <div class="pin-status" id="pin-status"></div>
+      </div>
+
+      <!-- Admin panel (shown when unlocked) -->
+      <div id="admin-panel" class="admin-panel" style="display:none;">
+        <div class="admin-section">
+          <div class="admin-section-title">--- REGISTERED OPERATORS ---</div>
+          <div id="admin-user-list"></div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">--- REGISTER NEW OPERATOR ---</div>
+          <div class="admin-form">
+            <input type="text" id="admin-callsign" placeholder="CALLSIGN (e.g. ALPHA-1)" autocomplete="off" spellcheck="false">
+            <textarea id="admin-pubkey" placeholder="PASTE PUBLIC KEY (PEM format)"></textarea>
+            <div style="display:flex; gap:6px;">
+              <button class="admin-btn" onclick="adminRegisterUser()">REGISTER</button>
+              <button class="admin-btn" onclick="adminGenerateKeypair()">GENERATE KEYPAIR</button>
+            </div>
+            <div class="admin-msg" id="admin-register-msg"></div>
+          </div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">--- BLOCKED CONTACTS ---</div>
+          <div id="admin-blocks-list"></div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">--- CHANGE ADMIN PIN ---</div>
+          <div class="admin-form">
+            <input type="password" id="admin-old-pin" placeholder="CURRENT PIN" autocomplete="off">
+            <input type="password" id="admin-new-pin" placeholder="NEW PIN (min 4 digits)" autocomplete="off">
+            <button class="admin-btn" onclick="adminChangePin()">UPDATE PIN</button>
+            <div class="admin-msg" id="admin-pin-msg"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/js/core.js"></script>
+<script src="/static/js/knowledge.js"></script>
+<script src="/static/js/comms.js"></script>
+<script src="/static/js/system.js"></script>
+<script src="/static/js/medical.js"></script>
+<script src="/static/js/maps.js"></script>
+<script src="/static/js/power.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

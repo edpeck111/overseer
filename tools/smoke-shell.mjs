@@ -105,6 +105,13 @@ window.fetch = async (url, opts) => {
     width: 16, height: 12,
     bitmap: Array.from({length: 12}, (_, y) => Array.from({length: 16}, (_, x) => (x + y) % 3 === 0 ? 1 : 0)),
   });
+  if (u.includes("/api/n/tiles/status")) return fakeResp({ available: false, tiles: 0 });
+  if (u.includes("/api/n/gps/fix")) {
+    // Sprint 22 — smoke runs without a real GPS; emulate "no fix yet" (204)
+    // so the shell stays at its default operator position.
+    return { ok: false, status: 204,
+             json: async () => ({}), text: async () => "" };
+  }
   if (u.endsWith("/api/n/overlays")) return fakeResp([]);
   if (u.endsWith("/api/m/runs")) return fakeResp([
     { id: 99, category: "bleeding", started: 1714086840, ended: 1714086900, outcome: "ARTERIAL — LIFE THREAT", step_count: 1 },
@@ -334,6 +341,11 @@ window.fetch = async (url, opts) => {
     { id:2, target:"Config",     path:"/mnt/usb0/config.tar.gz", status:"ok",      size_mb:1.2,  at:Date.now()/1000-7200 },
     { id:3, target:"Knowledge",  path:"/mnt/usb0/know.tar.gz",   status:"pending", size_mb:0.0,  at:Date.now()/1000-60   },
   ]});
+  if (u.endsWith("/api/hw")) return fakeResp({
+    sdr:"synthetic",lora:"synthetic",mesh:"synthetic",gps:"synthetic",
+    power:"synthetic",display:"synthetic",_any_real:false,
+    _synthetic:{sdr:true,lora:true,mesh:true,gps:true,power:true,display:true},
+  });
   return fakeResp("not mocked", 404);
 };
 window.WebSocket = function () {
@@ -659,18 +671,15 @@ const compassRows = nav.querySelectorAll(".nav-compass-row");
 if (compassRows.length < 1) fail("NAVIGATION compass empty (mock /api/n/nearest not consumed)");
 pass(`NAVIGATION compass shows ${compassRows.length} bearing(s)`);
 
-// Map sub-screen — text-map rendered through the JS sextant rasterizer
+// Map sub-screen — Leaflet tile map (Sprint 21)
 navTabs[2].click();
 await new Promise((r) => setTimeout(r, 80));
-const mapPre = nav.querySelector(".nav-map");
-if (!mapPre) fail("NAVIGATION text-map not rendered");
-const mapText = mapPre.textContent;
-// Verify the output contains sextant glyphs (U+1FB00..1FB3B range or
-// the four substitutions). Cheap test: presence of a non-ASCII char.
-if (!/[\u2580\u2588\u2590\u258C\u{1FB00}-\u{1FB3B}]/u.test(mapText)) {
-  fail(`NAVIGATION text-map has no sextant glyphs: "${mapText.slice(0, 40)}"`);
-}
-pass(`NAVIGATION text-map renders sextant glyphs (${mapText.split("\n").length} rows)`);
+const mapHeader = nav.querySelector(".nav-map-header");
+if (!mapHeader) fail("NAVIGATION map sub-screen missing .nav-map-header");
+// No tiles downloaded in CI — disabled banner should appear
+const mapBanner = nav.querySelector(".nav-disabled-banner");
+if (!mapBanner) fail("NAVIGATION map sub-screen: expected disabled banner (no tiles in test)");
+pass("NAVIGATION map sub-screen renders (header + no-tiles banner)");
 
 // Overlays sub-screen
 navTabs[3].click();

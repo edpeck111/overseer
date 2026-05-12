@@ -1,0 +1,47 @@
+/* ======================================================================
+   OVERSEER v3 — design tokens
+   Lifted verbatim from docs/00-VISUAL-REFERENCE.html (canonical).
+   When this file and the visual reference disagree, the file wins.
+   ====================================================================== */
+
+:root {
+  /* Backgrounds ------------------------------------------------------ */
+  --bg-deep:        #050807;   /* terminal background */
+  --bg-panel:       #0a1410;   /* panel fill */
+  --bg-panel-hi:    #0f1d17;   /* panel hover/active */
+  --bg-strip:       #06120c;   /* status strip, hotkey bar */
+
+  /* Rules / borders -------------------------------------------------- */
+  --rule-dim:       #133021;
+  --rule:           #1f5538;
+  --rule-bright:    #2d7a4e;
+
+  /* Phosphor green (primary) ---------------------------------------- */
+  --fg-dim:         #1d8c4a;
+  --fg:             #2cc26a;
+  --fg-bright:      #5fff9b;
+  --fg-glow:        #b8ffd2;
+
+  /* Accents ---------------------------------------------------------- */
+  --amber:          #ffb849;   /* headers, brand, attention */
+  --amber-bright:   #ffd27a;
+  --red:            #ff4747;   /* danger only */
+  --red-bright:     #ff8585;
+  --cyan:           #4adfff;   /* network, signed/verified */
+  --cyan-bright:    #8ff0ff;
+  --magenta:        #ff5fb8;   /* SIGNAL module */
+  --violet:         #b58cff;   /* admin overlays, easter eggs */
+  --paper:          #d8e8d8;   /* high-contrast fallback */
+
+  /* Typography ------------------------------------------------------- */
+  --char-w:         clamp(7px, 1.45vw, 11px);
+  --line-h:         1.55;
+
+  /* Glow ------------------------------------------------------------- */
+  --glow-soft:      0 0 6px rgba(95,255,155,0.25), 0 0 14px rgba(95,255,155,0.08);
+  --glow-strong:    0 0 4px rgba(184,255,210,0.55), 0 0 12px rgba(95,255,155,0.35);
+
+  /* Breakpoints (informational; CSS uses [data-mode] rather than @media) */
+  --bp-tablet:      720px;
+  --bp-desktop:     1100px;
+}

@@ -1,0 +1,76 @@
+/* Dashboard primitives — lifted from docs/00-VISUAL-REFERENCE.html.
+ * Layout (.power grid) lives in modules/power.css; this file is for
+ * the reusable visual atoms (tile, bar, sparkline, bignum, kv-grid). */
+
+.tile {
+  border: 1px solid var(--rule);
+  background: var(--bg-panel);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tile-title {
+  font-size: 0.88em;
+  color: var(--amber);
+  letter-spacing: 0.22em;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.tile-title .meta { color: var(--fg-dim); font-size: 0.9em; letter-spacing: 0.1em; }
+
+.bignum {
+  font-size: 2.2em;
+  color: var(--fg-glow);
+  text-shadow: var(--glow-strong);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.bignum .unit  { font-size: 0.4em; color: var(--fg-dim); margin-left: 4px; letter-spacing: 0.2em; }
+.bignum.warn   { color: var(--amber-bright); text-shadow: 0 0 12px rgba(255,184,73,0.5); }
+.bignum.alert  { color: var(--red-bright); }
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95em;
+}
+.bar .lab { color: var(--fg-dim); min-width: 5ch; letter-spacing: 0.1em; }
+.bar .track {
+  flex: 1;
+  height: 0.9em;
+  background: var(--rule-dim);
+  border: 1px solid var(--rule);
+  position: relative;
+}
+.bar .fill {
+  position: absolute; top: 0; left: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--fg-dim), var(--fg-bright));
+  box-shadow: 0 0 8px rgba(95,255,155,0.5);
+}
+.bar.warn  .fill { background: linear-gradient(90deg, #6e4500, var(--amber)); box-shadow: 0 0 8px rgba(255,184,73,0.5); }
+.bar.alert .fill { background: linear-gradient(90deg, #5a1010, var(--red)); }
+.bar .pct { color: var(--fg-bright); min-width: 4ch; text-align: right; }
+
+.spark {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.2em;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.spark .a { color: var(--fg-dim); }
+.spark .b { color: var(--fg); }
+.spark .c { color: var(--fg-bright); }
+.spark .d { color: var(--amber); }
+.spark .e { color: var(--red-bright); }
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  font-size: 0.95em;
+}
+.kv-grid .k { color: var(--fg-dim); letter-spacing: 0.1em; }
+.kv-grid .v { color: var(--fg-bright); }

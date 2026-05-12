@@ -1,0 +1,125 @@
+/* KNOWLEDGE module — chat + library Miller columns + branch tree.
+ * Lives inside the shared P2 chrome (status strip, breadcrumb, hotkey
+ * bar). Sub-screens routed by C/L/B inside the module. */
+
+.knowledge {
+  display: flex; flex-direction: column;
+  min-height: 460px;
+  padding: 0;
+}
+
+.kb-tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg-strip);
+  padding: 4px 8px;
+}
+.kb-tab {
+  padding: 4px 10px; cursor: pointer;
+  display: inline-flex; gap: 4px; align-items: baseline;
+  border-right: 1px dashed var(--rule);
+  font-size: 0.92em;
+  color: var(--fg);
+}
+.kb-tab .k {
+  background: var(--fg); color: var(--bg-deep);
+  padding: 0 5px; font-weight: 700;
+}
+.kb-tab .l { color: var(--fg-dim); letter-spacing: 0.1em; }
+.kb-tab.active .l { color: var(--fg-glow); }
+.kb-tab.active { background: var(--rule-dim); }
+
+.kb-body { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+
+/* chat */
+.kb-log {
+  flex: 1; overflow-y: auto; min-height: 200px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 0.95em; line-height: 1.55;
+  padding: 8px;
+  border: 1px solid var(--rule);
+  background: var(--bg-panel);
+}
+.kb-turn { display: block; }
+.kb-turn-user .kb-sigil    { color: var(--amber); font-weight: 700; }
+.kb-turn-overseer .kb-sigil { color: var(--cyan); font-weight: 700; }
+.kb-turn-system .kb-sigil  { color: var(--fg-dim); }
+.kb-turn-overseer { color: var(--fg-bright); }
+.kb-cite {
+  color: var(--amber);
+  cursor: pointer;
+  border-bottom: 1px dotted var(--amber);
+  padding: 0 2px;
+}
+.kb-cite:hover { color: var(--amber-bright); border-bottom-style: solid; }
+
+.kb-input {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 8px;
+  border: 1px solid var(--rule);
+  background: var(--bg-strip);
+}
+.kb-input .sigil { color: var(--amber); font-weight: 700; }
+.kb-input .field {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--fg-bright);
+  font: inherit;
+  letter-spacing: inherit;
+}
+.kb-input .field::placeholder { color: var(--fg-dim); font-style: italic; }
+
+/* library Miller columns */
+.kb-miller {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  flex: 1; min-height: 0;
+}
+.terminal[data-mode="tablet"]  .kb-miller,
+.terminal[data-mode="desktop"] .kb-miller { grid-template-columns: 18ch 28ch 1fr; }
+
+.kb-col {
+  border: 1px solid var(--rule);
+  background: var(--bg-panel);
+  padding: 8px;
+  overflow-y: auto;
+}
+.kb-col-title {
+  color: var(--amber);
+  letter-spacing: 0.22em;
+  font-size: 0.85em;
+  margin-bottom: 6px;
+  border-bottom: 1px dashed var(--rule);
+  padding-bottom: 4px;
+}
+.kb-item {
+  padding: 3px 6px;
+  cursor: pointer;
+  display: flex; gap: 6px; justify-content: space-between;
+  font-size: 0.95em;
+}
+.kb-item:hover  { background: var(--bg-panel-hi); }
+.kb-item.active { background: var(--rule-dim); color: var(--fg-glow); }
+.kb-item .kb-name { color: var(--fg-bright); }
+.kb-item .kb-meta { color: var(--fg-dim); font-size: 0.85em; }
+
+.kb-preview { padding: 12px; }
+.kb-preview-title { color: var(--amber); margin-bottom: 8px; }
+.kb-para { margin: 6px 0; color: var(--fg); }
+.kb-para.focused { background: var(--rule-dim); color: var(--fg-glow); padding: 4px 8px; border-left: 2px solid var(--amber); }
+.kb-empty, .kb-error { color: var(--fg-dim); font-style: italic; padding: 8px; }
+
+/* branches */
+.kb-tree {
+  white-space: pre;
+  color: var(--fg);
+  font-size: 0.95em;
+  line-height: 1.5;
+  padding: 8px;
+  border: 1px solid var(--rule);
+  background: var(--bg-panel);
+  overflow-x: auto;
+}

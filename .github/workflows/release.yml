@@ -1,0 +1,65 @@
+name: release-checks
+
+on:
+  push:
+    tags:
+      - "v3.*"
+  workflow_dispatch:
+
+jobs:
+  python:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pyright || true   # warn-only until coverage lands
+      - run: pytest             # unit + integration
+
+  shell-build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: shell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run build
+      - name: Bundle size budget (≤ 2 MB gzipped per plan §5)
+        run: |
+          gzip -k public/dist/main.js
+          size=$(stat -c %s public/dist/main.js.gz)
+          echo "Gzipped bundle: $size bytes (budget 2097152)"
+          test "$size" -le 2097152
+      - name: Upload built bundle for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-bundle
+          path: shell/public/dist/
+
+  shell-smoke:
+    runs-on: ubuntu-22.04
+    needs: shell-build
+    defaults:
+      run:
+        working-directory: shell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - name: Restore built bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: shell-bundle
+          path: shell/public/dist/
+      - name: Run jsdom smoke (Sprint 1+2 gate assertions)
+        run: npm run smoke

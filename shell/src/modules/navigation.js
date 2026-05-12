@@ -1,20 +1,23 @@
-// NAVIGATION module — waypoints, compass, sextant text-map, overlays.
+// NAVIGATION module — waypoints, compass, Leaflet map, overlays.
 //
-// Sprint 8. Hotkey N from HOME mounts on waypoints. Sub-screens
-// routed by W (waypoints), C (compass), M (text-map), O (overlays).
+// Sprint 8.  Hotkey N from HOME mounts on waypoints.  Sub-screens
+// routed by W (waypoints), C (compass), M (map), O (overlays).
 //
-// The text-map sub-screen is THE first real consumer of
-// shell/src/sextant/ in production code (ADR-0009). It fetches the
-// 1-bit terrain bitmap from /api/n/terrain and runs it through
-// rasterize() locally — so the parity guarantee from Sprint 4 has
-// real teeth here.
+// Sprint 21: M sub-screen upgraded from sextant text-map to real
+// Leaflet tile map served from /api/n/tiles/{z}/{x}/{y} (MBTiles).
 
 import { el, txt } from "../chrome/_dom.js";
-import { rasterize } from "../sextant/index.js";
 
 const SUBS = { W: "waypoints", C: "compass", M: "map", O: "overlays" };
-// Default operator location — Sheffield-ish. Real GPS swap in Sprint 8.5.
+// Default operator location when /api/n/gps/fix returns 204 (no fix yet).
+// Sheffield-ish so the map opens to UK by default; replaced as soon as
+// the configured GPS backend produces a fix.
 const ME_LL = { lat: 53.38, lon: -1.47 };
+
+// Poll cadence for the GPS fix endpoint (ms). Synthetic walks ≤10 m / read;
+// real gpsd / NMEA updates are typically 1 Hz, but we don't need to keep up
+// with that on a Leaflet marker.
+const GPS_POLL_MS = 10_000;
 
 const local = {
   sub: "waypoints",
@@ -22,9 +25,12 @@ const local = {
   selectedCat: null,
   selectedWp: null,
   compass: null,
-  mapBitmap: null,
-  mapText: null,
   overlays: null,
+  leafletMap: null,     // live Leaflet instance — destroyed on unmount
+  tilesAvailable: null, // null=unchecked, true/false
+  operatorMarker: null, // live Leaflet circleMarker for the operator
+  gpsPollId: null,      // setInterval handle for /api/n/gps/fix
+  lastFix: null,        // most recent fix dict, or null
 };
 
 export function mountNavigation(root, store, ctx) {
@@ -60,6 +66,9 @@ export function mountNavigation(root, store, ctx) {
 
   return function unmount() {
     document.removeEventListener("keydown", onKey, true);
+    if (local.gpsPollId) { clearInterval(local.gpsPollId); local.gpsPollId = null; }
+    if (local.leafletMap) { local.leafletMap.remove(); local.leafletMap = null; }
+    local.operatorMarker = null;
   };
 }
 
@@ -188,27 +197,126 @@ async function paintCompass(body) {
   body.appendChild(list);
 }
 
-// --------------------------- map (sextant text-map) ---------------------------
+// --------------------------- map (Leaflet, real OSM tiles) ---------------------------
+
+// Fetch the current GPS fix; returns null on 204 / network error / non-OK.
+async function fetchGpsFix() {
+  try {
+    const resp = await fetch("/api/n/gps/fix");
+    if (resp.status === 204) return null;
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch { return null; }
+}
+
+// Update the operator marker + recenter (only if no manual pan since the
+// last fix — Leaflet's hasUserInteracted is not exposed, so we keep it
+// simple: recenter on first fix only).
+function applyFix(map, fix, isFirstFix) {
+  if (!fix || !local.operatorMarker) return;
+  local.operatorMarker.setLatLng([fix.lat, fix.lon]);
+  const popup = `<b>YOUR POSITION</b><br>` +
+                `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}` +
+                (fix.alt_m != null ? `<br>alt ${fix.alt_m.toFixed(0)} m` : "") +
+                (fix.sats ? `<br>${fix.sats} sat · ${fix.fix_type}` : "");
+  local.operatorMarker.setPopupContent(popup);
+  if (isFirstFix) map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), 10));
+  local.lastFix = fix;
+}
+
 async function paintMap(body) {
+  // Always destroy the previous Leaflet instance before replacing the DOM.
+  // Also stop any GPS poll the previous instance left running.
+  if (local.gpsPollId) { clearInterval(local.gpsPollId); local.gpsPollId = null; }
+  if (local.leafletMap) { local.leafletMap.remove(); local.leafletMap = null; }
+  local.operatorMarker = null;
+
   body.replaceChildren();
-  body.appendChild(el("div", "kb-col-title", txt("TEXT MAP · sextant rasterizer (ADR-0009)")));
-  if (!local.mapBitmap) {
+
+  // Check tile availability once per session
+  if (local.tilesAvailable === null) {
     try {
-      const j = await (await fetch("/api/n/terrain?w=64&h=48&threshold_m=600")).json();
-      local.mapBitmap = j.bitmap;
-      local.mapText = rasterize(local.mapBitmap);
-    } catch (e) {
-      local.mapText = `[fetch failed: ${e.message}]`;
-    }
+      const s = await (await fetch("/api/n/tiles/status")).json();
+      local.tilesAvailable = s.available && s.tiles > 0;
+      local._tilesMeta = s;
+    } catch { local.tilesAvailable = false; }
   }
-  const meta = el("div", "nav-map-meta", txt(
-    `bitmap ${local.mapBitmap ? local.mapBitmap[0].length : 0}×${local.mapBitmap ? local.mapBitmap.length : 0}` +
-    `  ·  rendered ${local.mapText ? local.mapText.split("\n").length : 0} sextant rows`,
-  ));
-  body.appendChild(meta);
-  const pre = el("pre", "nav-map");
-  pre.textContent = local.mapText || "(loading…)";
-  body.appendChild(pre);
+
+  const header = el("div", "nav-map-header");
+  if (!local.tilesAvailable) {
+    const banner = el("div", "nav-disabled-banner");
+    banner.appendChild(el("span", "icon", txt("⚠")));
+    banner.appendChild(el("span", "msg", txt(
+      "MAP TILES NOT DOWNLOADED — run: python tools/download_tiles.py  " +
+      "(or: set MBTILES_MAX_ZOOM=8 for a quick z0-8 set)"
+    )));
+    header.appendChild(banner);
+  } else {
+    const m = local._tilesMeta || {};
+    header.appendChild(el("div", "nav-map-meta",
+      txt(`OSM tiles: ${(m.tiles||0).toLocaleString()} · z${m.minzoom||0}-${m.maxzoom||14} · ${m.bounds||"UK"}`)));
+  }
+  body.appendChild(header);
+
+  if (!window.L) {
+    body.appendChild(el("div", "kb-empty", txt("Leaflet unavailable — check network")));
+    return;
+  }
+
+  const mapDiv = document.createElement("div");
+  mapDiv.className = "nav-leaflet-map";
+  body.appendChild(mapDiv);
+
+  // Leaflet must initialise after the container is in the DOM
+  requestAnimationFrame(() => {
+    const map = window.L.map(mapDiv, { zoomControl: true }).setView([ME_LL.lat, ME_LL.lon], 7);
+
+    window.L.tileLayer("/api/n/tiles/{z}/{x}/{y}", {
+      maxZoom: 14,
+      minZoom: 0,
+      attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors",
+      // silent on missing tiles -- shows blank rather than broken-image icon
+      errorTileUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScAAAAAElFTkSuQmCC",
+    }).addTo(map);
+
+    // Operator position — starts at default, updated by /api/n/gps/fix poll.
+    local.operatorMarker = window.L.circleMarker(
+      [ME_LL.lat, ME_LL.lon],
+      { radius: 7, color: "#0f0", fillColor: "#0f0", fillOpacity: 0.8 }
+    )
+      .bindPopup("<b>YOUR POSITION</b><br>(default — waiting for GPS fix)")
+      .addTo(map);
+
+    // Kick off an immediate fetch + recurring poll. If the configured GPS
+    // backend never produces a fix (and the synthetic source is disabled),
+    // /api/n/gps/fix returns 204 and we stay at the default position.
+    let firstFix = true;
+    fetchGpsFix().then((fix) => {
+      if (fix) { applyFix(map, fix, firstFix); firstFix = false; }
+    });
+    local.gpsPollId = setInterval(() => {
+      fetchGpsFix().then((fix) => {
+        if (fix) { applyFix(map, fix, firstFix); firstFix = false; }
+      });
+    }, GPS_POLL_MS);
+
+    // Waypoints
+    const wps = local.waypoints || [];
+    const catColors = { cache: "#f80", rdv: "#0bf", water: "#48f", shelter: "#fa0", default: "#aaa" };
+    for (const w of wps) {
+      const col = catColors[w.cat] || catColors.default;
+      window.L.circleMarker([w.lat, w.lon], { radius: 6, color: col, fillColor: col, fillOpacity: 0.9 })
+        .bindPopup(
+          `<b>${w.name}</b><br>` +
+          `cat: ${w.cat}<br>` +
+          `${w.lat.toFixed(5)}, ${w.lon.toFixed(5)}` +
+          (w.notes ? `<br><em>${w.notes}</em>` : "")
+        )
+        .addTo(map);
+    }
+
+    local.leafletMap = map;
+  });
 }
 
 // --------------------------- overlays ---------------------------
