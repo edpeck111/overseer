@@ -6,9 +6,9 @@
 
 ## TL;DR
 
-  - HEAD: `b470ec3 Sprint 21+22 + v3 tree catch-up: real tiles,
-    real hardware, ADR-0014`. `origin/v3-redesign` is still at
-    `a933e4c` (Sprint 20) — push is the only remaining manual step.
+  - HEAD = `origin/v3-redesign` = `4a0f791` (STATUS update on top of
+    `b470ec3 Sprint 21+22 + v3 tree catch-up: real tiles, real
+    hardware, ADR-0014`). Pushed.
   - Sprints **0–22 done**; Sprint 23+ (more real hardware — SDR / LoRa /
     Mesh / display — plus Cardputer firmware) is next.
   - All gates green: **397 pytest passed (0 failed), smoke
