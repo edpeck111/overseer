@@ -47,7 +47,9 @@ export function mountInventory(root, store, ctx) {
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) return;
     if (!SUBS[e.key]) return;
-    local.sub = SUBS[e.key]; e.preventDefault(); paint();
+    // stopPropagation: prevent the top-level router from also handling
+    // this key (e.g. P for "pack" used to also mount POWER).
+    local.sub = SUBS[e.key]; e.preventDefault(); e.stopPropagation(); paint();
   }
   document.addEventListener("keydown", onKey, true);
 

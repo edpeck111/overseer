@@ -56,7 +56,9 @@ export function mountNavigation(root, store, ctx) {
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
     if (!SUBS[e.key]) return;
-    local.sub = SUBS[e.key]; e.preventDefault(); paint();
+    // stopPropagation prevents the top-level router from also routing
+    // on this key (e.g. M for "map" used to also mount MEDICAL).
+    local.sub = SUBS[e.key]; e.preventDefault(); e.stopPropagation(); paint();
   }
   document.addEventListener("keydown", onKey, true);
 

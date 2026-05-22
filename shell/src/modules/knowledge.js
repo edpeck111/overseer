@@ -60,6 +60,9 @@ export function mountKnowledge(root, store, ctx) {
     if (!SUB_HOTKEYS[e.key]) return;
     local.sub = SUB_HOTKEYS[e.key];
     e.preventDefault();
+    // stopPropagation: prevent the top-level router from also handling
+    // a sub-screen key that matches a top-level hotkey (e.g. C/L/B).
+    e.stopPropagation();
     paint();
   }
   document.addEventListener("keydown", onKey, true);

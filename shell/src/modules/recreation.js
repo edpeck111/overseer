@@ -474,7 +474,12 @@ export function mountRecreation(root, store, ctx) {
   // ── keyboard ──────────────────────────────────────────────────────────────
   function onKey(e) {
     const k = e.key.toUpperCase();
-    if (SUBS[k]) { local.sub = SUBS[k]; paint(); return; }
+    if (SUBS[k]) {
+      // stopPropagation: prevent the top-level router from also handling
+      // sub-screen keys that collide with top-level hotkeys (C/R/T).
+      local.sub = SUBS[k]; e.preventDefault(); e.stopPropagation(); paint();
+      return;
+    }
   }
 
   screen.setAttribute("tabindex", "0");

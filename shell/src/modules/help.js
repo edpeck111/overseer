@@ -164,7 +164,11 @@ export function mountHelp(root, store, ctx) {
 
   function onKey(e) {
     const k = e.key.toUpperCase();
-    if (SUBS[k]) { local.sub = SUBS[k]; paint(); }
+    if (SUBS[k]) {
+      // stopPropagation: prevent the top-level router from also handling
+      // sub-screen keys that collide with top-level hotkeys (C/L).
+      local.sub = SUBS[k]; e.preventDefault(); e.stopPropagation(); paint();
+    }
   }
   screen.setAttribute("tabindex", "0");
   screen.addEventListener("keydown", onKey);

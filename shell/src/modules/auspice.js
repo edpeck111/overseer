@@ -72,7 +72,11 @@ export function mountAuspice(root, store, ctx) {
 
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) return;
-    if (SUBS[e.key]) { local.sub = SUBS[e.key]; e.preventDefault(); paint(); }
+    if (SUBS[e.key]) {
+      // stopPropagation: prevent the top-level router from also handling
+      // sub-screen keys that match a top-level hotkey (S/C/T).
+      local.sub = SUBS[e.key]; e.preventDefault(); e.stopPropagation(); paint();
+    }
   }
   document.addEventListener("keydown", onKey, true);
 

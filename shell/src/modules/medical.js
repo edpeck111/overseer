@@ -72,7 +72,9 @@ export function mountMedical(root, store, ctx) {
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
     if (!SUBS[e.key]) return;
-    local.sub = SUBS[e.key]; e.preventDefault(); paint();
+    // stopPropagation: prevent the top-level router from also handling
+    // this key (e.g. T for triage used to also mount TIMELINE).
+    local.sub = SUBS[e.key]; e.preventDefault(); e.stopPropagation(); paint();
   }
   document.addEventListener("keydown", onKey, true);
 

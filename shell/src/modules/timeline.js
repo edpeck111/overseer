@@ -62,11 +62,21 @@ export function mountTimeline(root, store, ctx) {
 
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) return;
-    if (SUBS[e.key]) { local.sub = SUBS[e.key]; e.preventDefault(); paint(); return; }
-    // Range keys 1/3/7/M/A in feed mode
+    if (SUBS[e.key]) {
+      // stopPropagation: prevent the top-level router from also handling
+      // sub-screen keys that match a top-level hotkey.
+      local.sub = SUBS[e.key]; e.preventDefault(); e.stopPropagation(); paint();
+      return;
+    }
+    // Range keys 1/3/7/M/A in feed mode — M collides with MEDICAL, so
+    // stopPropagation on those too.
     if (local.sub === "feed") {
       const r = RANGES.find(x => x.key === e.key.toUpperCase());
-      if (r) { local.range = r; local.events = null; e.preventDefault(); loadFeed().then(() => paintFeed(body)); }
+      if (r) {
+        local.range = r; local.events = null;
+        e.preventDefault(); e.stopPropagation();
+        loadFeed().then(() => paintFeed(body));
+      }
     }
   }
   document.addEventListener("keydown", onKey, true);

@@ -50,7 +50,9 @@ export function mountLog(root, store, ctx) {
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
     if (!SUBS[e.key]) return;
-    local.sub = SUBS[e.key]; e.preventDefault(); paint();
+    // stopPropagation: prevent the top-level router from also handling
+    // a sub-screen key that happens to match a top-level hotkey.
+    local.sub = SUBS[e.key]; e.preventDefault(); e.stopPropagation(); paint();
   }
   document.addEventListener("keydown", onKey, true);
 

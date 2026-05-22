@@ -55,6 +55,9 @@ export function mountComms(root, store, ctx) {
     if (!SUBS[e.key]) return;
     local.sub = SUBS[e.key];
     e.preventDefault();
+    // stopPropagation: prevent the top-level router from also handling
+    // a sub-screen key that matches a top-level hotkey.
+    e.stopPropagation();
     paint();
   }
   document.addEventListener("keydown", onKey, true);
