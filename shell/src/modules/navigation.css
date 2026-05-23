@@ -35,7 +35,38 @@
 .nav-map-header { display: flex; flex-direction: column; gap: 4px; padding: 0 0 6px 0; }
 .nav-map-meta { color: var(--fg-dim); font-size: 0.9em; }
 
-/* Real Leaflet map container */
+/* Mode toggle row — [T] text / [G] graphical */
+.nav-map-toggle { display: flex; gap: 8px; padding: 0 0 6px 0; }
+.nav-map-mode-btn {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 2px 8px; border: 1px solid var(--rule); cursor: pointer;
+  background: var(--bg-panel); color: var(--fg-dim);
+  letter-spacing: 0.05em; font-size: 0.9em;
+}
+.nav-map-mode-btn:hover { background: var(--bg-panel-hi); color: var(--fg); }
+.nav-map-mode-btn.active {
+  background: var(--rule-dim); color: var(--fg-bright); border-color: var(--amber);
+}
+.nav-map-mode-btn .k { color: var(--amber); font-weight: 700; }
+.nav-map-mode-btn .l { text-transform: uppercase; }
+
+/* Sextant text-map — the default view (ADR-0015) */
+.nav-map {
+  font-family: var(--mono, "JetBrains Mono", "Cascadia Code", "Iosevka", monospace);
+  font-size: 13px;
+  line-height: 1.0;
+  color: var(--fg-bright);
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  padding: 8px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre;
+  letter-spacing: 0;
+}
+.nav-map-legend { padding-top: 8px; }
+
+/* Real Leaflet map container — graphical mode (opt-in, WiFi only) */
 .nav-leaflet-map {
   width: 100%;
   height: calc(100vh - 160px);

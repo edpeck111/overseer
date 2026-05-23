@@ -1,14 +1,21 @@
-// NAVIGATION module — waypoints, compass, Leaflet map, overlays.
+// NAVIGATION module — waypoints, compass, dual-mode map, overlays.
 //
 // Sprint 8.  Hotkey N from HOME mounts on waypoints.  Sub-screens
 // routed by W (waypoints), C (compass), M (map), O (overlays).
 //
-// Sprint 21: M sub-screen upgraded from sextant text-map to real
-// Leaflet tile map served from /api/n/tiles/{z}/{x}/{y} (MBTiles).
+// Sprint 22.6: M sub-screen is dual-mode. Default is the sextant
+// text-map (ADR-0009, ADR-0015) consuming /api/n/terrain — the
+// bandwidth-friendly view that works on every transport. Pressing G
+// while in M switches to the Leaflet/MBTiles graphical view for
+// high-detail WiFi inspection; T returns to text mode. See
+// docs/06-TEXT-MAP-SYSTEM.md for the architectural primacy of ASCII.
 
 import { el, txt } from "../chrome/_dom.js";
+import { rasterize } from "../sextant/index.js";
 
 const SUBS = { W: "waypoints", C: "compass", M: "map", O: "overlays" };
+// Map-mode toggle keys only active while in the map sub-screen.
+const MAP_MODE_KEYS = { T: "text", G: "graphical" };
 // Default operator location when /api/n/gps/fix returns 204 (no fix yet).
 // Sheffield-ish so the map opens to UK by default; replaced as soon as
 // the configured GPS backend produces a fix.
@@ -26,7 +33,10 @@ const local = {
   selectedWp: null,
   compass: null,
   overlays: null,
-  leafletMap: null,     // live Leaflet instance — destroyed on unmount
+  mapMode: "text",      // "text" (sextant, default) | "graphical" (Leaflet)
+  mapBitmap: null,      // cached 0/1 bitmap from /api/n/terrain
+  mapText: null,        // cached rasterize() output
+  leafletMap: null,     // live Leaflet instance — destroyed on unmount or mode switch
   tilesAvailable: null, // null=unchecked, true/false
   operatorMarker: null, // live Leaflet circleMarker for the operator
   gpsPollId: null,      // setInterval handle for /api/n/gps/fix
@@ -55,6 +65,14 @@ export function mountNavigation(root, store, ctx) {
 
   function onKey(e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+    // While in the map sub-screen, T/G toggle text-vs-graphical mode.
+    // Handled before the SUBS check so neither key falls through to a
+    // top-level route.
+    if (local.sub === "map" && MAP_MODE_KEYS[e.key]) {
+      local.mapMode = MAP_MODE_KEYS[e.key];
+      e.preventDefault(); e.stopPropagation(); paint();
+      return;
+    }
     if (!SUBS[e.key]) return;
     // stopPropagation prevents the top-level router from also routing
     // on this key (e.g. M for "map" used to also mount MEDICAL).
@@ -68,9 +86,7 @@ export function mountNavigation(root, store, ctx) {
 
   return function unmount() {
     document.removeEventListener("keydown", onKey, true);
-    if (local.gpsPollId) { clearInterval(local.gpsPollId); local.gpsPollId = null; }
-    if (local.leafletMap) { local.leafletMap.remove(); local.leafletMap = null; }
-    local.operatorMarker = null;
+    tearDownLeaflet();
   };
 }
 
@@ -199,42 +215,93 @@ async function paintCompass(body) {
   body.appendChild(list);
 }
 
-// --------------------------- map (Leaflet, real OSM tiles) ---------------------------
+// --------------------------- map (dual-mode: sextant text / Leaflet) ---------------------------
+//
+// Architectural primacy (docs/06-TEXT-MAP-SYSTEM.md, ADR-0015): the
+// text-map is the default. Leaflet is an opt-in detail view for WiFi
+// sessions. Both modes share the same lifecycle — switching modes or
+// leaving the sub-screen tears down Leaflet + the GPS poll.
 
-// Fetch the current GPS fix; returns null on 204 / network error / non-OK.
-async function fetchGpsFix() {
-  try {
-    const resp = await fetch("/api/n/gps/fix");
-    if (resp.status === 204) return null;
-    if (!resp.ok) return null;
-    return await resp.json();
-  } catch { return null; }
-}
-
-// Update the operator marker + recenter (only if no manual pan since the
-// last fix — Leaflet's hasUserInteracted is not exposed, so we keep it
-// simple: recenter on first fix only).
-function applyFix(map, fix, isFirstFix) {
-  if (!fix || !local.operatorMarker) return;
-  local.operatorMarker.setLatLng([fix.lat, fix.lon]);
-  const popup = `<b>YOUR POSITION</b><br>` +
-                `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}` +
-                (fix.alt_m != null ? `<br>alt ${fix.alt_m.toFixed(0)} m` : "") +
-                (fix.sats ? `<br>${fix.sats} sat · ${fix.fix_type}` : "");
-  local.operatorMarker.setPopupContent(popup);
-  if (isFirstFix) map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), 10));
-  local.lastFix = fix;
-}
-
-async function paintMap(body) {
-  // Always destroy the previous Leaflet instance before replacing the DOM.
-  // Also stop any GPS poll the previous instance left running.
+function tearDownLeaflet() {
   if (local.gpsPollId) { clearInterval(local.gpsPollId); local.gpsPollId = null; }
   if (local.leafletMap) { local.leafletMap.remove(); local.leafletMap = null; }
   local.operatorMarker = null;
+}
 
+function appendModeToggle(body) {
+  const toggle = el("div", "nav-map-toggle");
+  for (const [key, mode] of Object.entries(MAP_MODE_KEYS)) {
+    const btn = el("span", "nav-map-mode-btn" + (local.mapMode === mode ? " active" : ""));
+    btn.append(el("span", "k", txt(key)), el("span", "l", txt(mode)));
+    btn.addEventListener("click", () => {
+      if (local.mapMode === mode) return;
+      local.mapMode = mode; paintMap(body);
+    });
+    toggle.appendChild(btn);
+  }
+  body.appendChild(toggle);
+}
+
+async function paintMap(body) {
+  tearDownLeaflet();
   body.replaceChildren();
+  appendModeToggle(body);
+  if (local.mapMode === "graphical") return paintGraphicalMap(body);
+  return paintTextMap(body);
+}
 
+// --- Text mode: sextant rasterizer over /api/n/terrain ---
+async function paintTextMap(body) {
+  const header = el("div", "nav-map-header");
+  header.appendChild(el("div", "nav-map-meta",
+    txt("TEXT MAP · sextant rasterizer (Unicode 2×3 sub-cells, ADR-0009)")));
+  body.appendChild(header);
+
+  if (!local.mapBitmap) {
+    try {
+      const j = await (await fetch("/api/n/terrain?w=120&h=72&threshold_m=600")).json();
+      local.mapBitmap = j.bitmap;
+      local.mapText = rasterize(local.mapBitmap);
+    } catch (e) {
+      local.mapText = `[terrain fetch failed: ${e.message}]`;
+    }
+  }
+
+  const bmH = local.mapBitmap ? local.mapBitmap.length : 0;
+  const bmW = local.mapBitmap && local.mapBitmap[0] ? local.mapBitmap[0].length : 0;
+  const rendered = local.mapText ? local.mapText.split("\n").length : 0;
+  header.appendChild(el("div", "nav-map-meta",
+    txt(`bitmap ${bmW}×${bmH} → ${rendered} sextant rows · single-LoRa-packet view`)));
+
+  const pre = el("pre", "nav-map");
+  pre.textContent = local.mapText || "(loading…)";
+  body.appendChild(pre);
+
+  // Compact waypoint legend below the map — bearings + distances from
+  // the operator's default/last-fix position, matching the compass view.
+  const wps = local.waypoints || [];
+  if (wps.length) {
+    const legend = el("div", "nav-map-legend");
+    legend.appendChild(el("div", "kb-col-title", txt("WAYPOINTS")));
+    for (const w of wps.slice(0, 12)) {
+      const dKm = haversineKm(ME_LL.lat, ME_LL.lon, w.lat, w.lon);
+      const brg = bearingDeg(ME_LL.lat, ME_LL.lon, w.lat, w.lon);
+      const row = el("div", "nav-compass-row");
+      row.append(
+        el("span", "bearing", txt(`${String(Math.round(brg)).padStart(3, "0")}°`)),
+        el("span", "card",    txt(cardinal(brg))),
+        el("span", "name",    txt(w.name)),
+        el("span", "cat",     txt(w.cat)),
+        el("span", "dist",    txt(dKm < 1 ? `${Math.round(dKm * 1000)} m` : `${dKm.toFixed(2)} km`)),
+      );
+      legend.appendChild(row);
+    }
+    body.appendChild(legend);
+  }
+}
+
+// --- Graphical mode: Leaflet + MBTiles (opt-in, WiFi only) ---
+async function paintGraphicalMap(body) {
   // Check tile availability once per session
   if (local.tilesAvailable === null) {
     try {
@@ -289,9 +356,6 @@ async function paintMap(body) {
       .bindPopup("<b>YOUR POSITION</b><br>(default — waiting for GPS fix)")
       .addTo(map);
 
-    // Kick off an immediate fetch + recurring poll. If the configured GPS
-    // backend never produces a fix (and the synthetic source is disabled),
-    // /api/n/gps/fix returns 204 and we stay at the default position.
     let firstFix = true;
     fetchGpsFix().then((fix) => {
       if (fix) { applyFix(map, fix, firstFix); firstFix = false; }
@@ -319,6 +383,31 @@ async function paintMap(body) {
 
     local.leafletMap = map;
   });
+}
+
+// Fetch the current GPS fix; returns null on 204 / network error / non-OK.
+async function fetchGpsFix() {
+  try {
+    const resp = await fetch("/api/n/gps/fix");
+    if (resp.status === 204) return null;
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch { return null; }
+}
+
+// Update the operator marker + recenter (only if no manual pan since the
+// last fix — Leaflet's hasUserInteracted is not exposed, so we keep it
+// simple: recenter on first fix only).
+function applyFix(map, fix, isFirstFix) {
+  if (!fix || !local.operatorMarker) return;
+  local.operatorMarker.setLatLng([fix.lat, fix.lon]);
+  const popup = `<b>YOUR POSITION</b><br>` +
+                `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}` +
+                (fix.alt_m != null ? `<br>alt ${fix.alt_m.toFixed(0)} m` : "") +
+                (fix.sats ? `<br>${fix.sats} sat · ${fix.fix_type}` : "");
+  local.operatorMarker.setPopupContent(popup);
+  if (isFirstFix) map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), 10));
+  local.lastFix = fix;
 }
 
 // --------------------------- overlays ---------------------------

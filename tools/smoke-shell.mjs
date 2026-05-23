@@ -671,15 +671,37 @@ const compassRows = nav.querySelectorAll(".nav-compass-row");
 if (compassRows.length < 1) fail("NAVIGATION compass empty (mock /api/n/nearest not consumed)");
 pass(`NAVIGATION compass shows ${compassRows.length} bearing(s)`);
 
-// Map sub-screen — Leaflet tile map (Sprint 21)
+// Map sub-screen — dual-mode (Sprint 22.6, ADR-0015).
+// Default is the sextant text-map (ADR-0009); G switches to Leaflet.
 navTabs[2].click();
 await new Promise((r) => setTimeout(r, 80));
 const mapHeader = nav.querySelector(".nav-map-header");
 if (!mapHeader) fail("NAVIGATION map sub-screen missing .nav-map-header");
-// No tiles downloaded in CI — disabled banner should appear
+const mapToggle = nav.querySelector(".nav-map-toggle");
+if (!mapToggle) fail("NAVIGATION map sub-screen missing mode toggle row");
+const sextantPre = nav.querySelector("pre.nav-map");
+if (!sextantPre) fail("NAVIGATION map default view is not the sextant text-map");
+if (!sextantPre.textContent || sextantPre.textContent.length < 10) {
+  fail(`NAVIGATION sextant map rendered empty (got ${sextantPre.textContent.length} chars)`);
+}
+pass(`NAVIGATION map defaults to sextant text-map (${sextantPre.textContent.split("\n").length} rows)`);
+
+// Toggle to graphical via G. jsdom has no Leaflet CDN, so we assert the
+// graphical-mode plumbing (no-tiles banner) appears and the sextant <pre>
+// is gone — proving the toggle re-routed paintMap to paintGraphicalMap.
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "G" }));
+await new Promise((r) => setTimeout(r, 80));
 const mapBanner = nav.querySelector(".nav-disabled-banner");
-if (!mapBanner) fail("NAVIGATION map sub-screen: expected disabled banner (no tiles in test)");
-pass("NAVIGATION map sub-screen renders (header + no-tiles banner)");
+if (!mapBanner) fail("NAVIGATION G toggle: expected no-tiles disabled banner");
+if (nav.querySelector("pre.nav-map")) fail("NAVIGATION G toggle: sextant <pre> still present");
+pass("NAVIGATION G toggle switches to graphical mode (no-tiles banner shown)");
+
+// Toggle back to text via T — sextant pre returns, banner goes away.
+document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "T" }));
+await new Promise((r) => setTimeout(r, 60));
+if (!nav.querySelector("pre.nav-map")) fail("NAVIGATION T toggle did not restore sextant text-map");
+if (nav.querySelector(".nav-disabled-banner")) fail("NAVIGATION T toggle left graphical-mode banner behind");
+pass("NAVIGATION T toggle restores sextant text-map");
 
 // Overlays sub-screen
 navTabs[3].click();
