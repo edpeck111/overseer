@@ -1,16 +1,28 @@
 # OVERSEER v3 — status board
 
-**Last updated:** end of Sprint 22, Cowork session.
+**Last updated:** end of Sprint 23a — 2026-05-23.
 
 ---
 
 ## TL;DR
 
-  - HEAD = `origin/v3-redesign` = `4a0f791` (STATUS update on top of
-    `b470ec3 Sprint 21+22 + v3 tree catch-up: real tiles, real
-    hardware, ADR-0014`). Pushed.
-  - Sprints **0–22 done**; Sprint 23+ (more real hardware — SDR / LoRa /
-    Mesh / display — plus Cardputer firmware) is next.
+  - HEAD ahead of `origin/v3-redesign` (`4a0f791`) by the Sprint 22.6
+    map-dual-mode restore. ADR-0015 added; sextant text-map is the
+    NAVIGATION default again, with Leaflet as a `G`-key opt-in.
+  - Sprints **0–22 + 22.6 + 23a done**. Next queue, all scoped:
+    - **Sprint 23a — DONE.** OPi5 LoRa transport (`server/omp/lora_transport.py`),
+      Meshtastic-as-transport decision codified (ADR-0016), 17 new
+      pytest, /api/hw/lora endpoint. Synthetic-fallback path is
+      CI-green; hardware-on-the-air gate runs in 23b once a Heltec
+      is on the OPi5.
+    - **Sprint 23b–e** — Cardputer firmware path. Pending. OMP packets
+      already ride `PRIVATE_APP` payloads on the OPi5 side.
+    - **Sprint 24** — TRACKER audio module (WASM AudioWorklet, draws
+      on `c:\source\tracker`).
+    - **Sprint 25** — SDR + display backends + Cardputer polling
+      (split off Sprint 23 — independent hardware paths).
+  - Today: **OPi5 deploy works** (clone, pip install, `python -m server`,
+    served at `:6100/v3/`). **No LoRa TX yet** — Sprint 23a closes that.
   - All gates green: **397 pytest passed (0 failed), smoke
     ALL CHECKS PASSED**, no warnings except the expected
     synthetic-fallback `UserWarning`s in the new hardware tests.
@@ -56,7 +68,14 @@ git push -u origin v3-redesign
 | 20     | Polish: COMMS SQLite + hardware layer  | done     | ✓ |
 | 21     | Real tiles + DISABLED banners          | done     | ✓ |
 | 22     | Real hardware round 1: GPS + POWER     | done     | ✓ |
-| 23+    | SDR / LoRa / Mesh + Cardputer + push   | pending  | — |
+| 22.6   | Map dual-mode restore (sextant default)| done     | ✓ |
+| 23a    | LoRa MVP — OPi5 side via Meshtastic    | done     | ✓ |
+| 23b    | End-to-end OMP-over-Meshtastic spike   | pending  | — |
+| 23c    | Cardputer firmware skeleton            | pending  | — |
+| 23d    | Cardputer firmware — read-only OMP     | pending  | — |
+| 23e    | Cardputer firmware — write/sync + UI   | pending  | — |
+| 24     | TRACKER — send-the-score audio module  | pending  | — |
+| 25     | SDR + Display backends + Cardputer poll| pending  | — |
 
 ---
 
@@ -78,6 +97,588 @@ Test breakdown (357 total):
 
 Smoke: updated text-map assertion replaced with Leaflet map + no-tiles-banner
 check; /api/hw mock added; all prior assertions still passing.
+
+---
+
+## Sprint 23a deliverables (LoRa MVP on OPi5 — Meshtastic transport)
+
+Landed 2026-05-23. **Gate**: 414 pytest passed (+17 new), shell smoke
+ALL CHECKS PASSED. Hardware-on-the-air gate still pending until Ted
+has a Heltec on the OPi5; the synthetic path is what CI exercises.
+
+`server/omp/lora_transport.py` (new, ~250 lines):
+  - `dispatch_packet(raw, *, version=None)` — shared dispatch core used
+    by both the HTTP `/omp` route and the LoRa pubsub callback. Single
+    source of truth for "given an OMP packet, what's the response?".
+    `version=None` echoes the request's wire version (HTTP); the LoRa
+    path passes `0x02` explicitly to force compression on the air.
+  - `SyntheticLora` — no-op fallback. Records TX packets in-memory;
+    `receive()` drives a synthetic round-trip through the dispatcher
+    so tests + dev sims work without a radio.
+  - `MeshtasticLora` — real backend via the `meshtastic` Python library
+    over USB-serial. Lazy-imports `meshtastic.serial_interface` +
+    `meshtastic.protobuf.portnums_pb2` + `pubsub` inside
+    `__post_init__`. Subscribes to `meshtastic.receive.data`, filters
+    on `PRIVATE_APP` port number, dispatches, TX'es the response back
+    to the sender. ADR-0014 synthetic-fallback: any bring-up failure
+    (lib missing, serial port absent, open fails) attaches a
+    `SyntheticLora` and warns once. Server boot is unaffected.
+  - `get_transport()` — module-level selector. `OVERSEER_LORA=synthetic`
+    (or unset) → `SyntheticLora`. Any chip name (`sx1262`, `sx1278`,
+    `rylr998`) → `MeshtasticLora` (the library handles chip
+    differences; we don't need to know which is plugged in).
+  - `reset_for_tests()` — replace the transport for unit-test
+    isolation. Mirrors `navigation.reset_gps_for_tests`.
+  - `register(app)` + `/api/hw/lora` endpoint — exposes link state
+    (`{backend, node_id, tx_count, rx_count, last_error?}`) so 23b's
+    end-to-end spike can verify the link without going through `/api/hw`.
+
+`server/omp/server.py` (refactored):
+  - HTTP `/omp` route now delegates to `lora_transport.dispatch_packet`.
+    All wire-version-echo behaviour preserved (regression-tested).
+  - Removed dead-code `_error_packet` helper (moved inside the
+    transport module). `decode`/`encode` imports dropped — handlers
+    still import `Op` directly.
+
+`server/app.py`:
+  - Imports `server.omp.lora_transport`, calls `register(app)` +
+    `get_transport()` at boot. The eager bring-up surfaces config
+    problems at server start rather than at first packet (ADR-0014).
+
+`tests/unit/test_lora_transport.py` (new, 17 tests):
+  - `dispatch_packet` round-trips: PING → PONG with `server_time`,
+    HELLO → HELLO_ACK with `client_callsign` echo, unknown opcode →
+    ERROR(NOT_IMPL), handler exception → ERROR(HANDLER_THREW),
+    garbage input → ERROR(DECODE).
+  - Wire-version handling: echoes v0x01 → v0x01 by default; honours
+    explicit `version=0x02` to force compression.
+  - `SyntheticLora`: send records `(dest, payload)` tuples; `receive`
+    drives the full dispatcher; `close` is a no-op.
+  - `MeshtasticLora` on a CI box (no library, no radio): does not
+    raise, attaches `_fallback`, warns once, send/info/close all work
+    through the fallback.
+  - Selector: `OVERSEER_LORA=sx1262` instantiates `MeshtasticLora`
+    (with fallback attached because no hardware).
+  - HTTP `/omp` regression: PING round-trip through the refactored
+    Flask route; v0x01 request → v0x01 response (wire-version echo
+    preserved).
+  - `/api/hw/lora` endpoint returns the expected shape.
+
+`docs/architecture-decisions/0016-meshtastic-as-transport.md` (new):
+  - Documents Option A (custom LoRa) / Option B (Meshtastic as
+    transport, chosen) / Option C (firmware side-by-side, rejected).
+  - Pins the load-bearing decision so future PRs that try to slip
+    custom LoRa framing in have to argue against it explicitly.
+  - Revisit triggers: payload cap, duty cycle, upstream protocol
+    churn, regulatory change.
+
+### What 23a does NOT do (Sprint 23b/c/d/e own these)
+
+  - **Verify on real hardware.** Synthetic fallback is the CI path;
+    Ted plugs a Heltec V3 into the OPi5 for 23b's hardware gate.
+  - **Add `meshtastic` to `requirements.txt`.** Lazy import means
+    nothing breaks if absent. Pin when 23b confirms the lib version
+    we want.
+  - **Build the OMP opcode set out.** Still Sprint-2-level stubs.
+    Sprint 23d expands the read-path opcodes for the field-relay UX.
+  - **Fragmentation for writes >200 B.** Codec already has a Sprint
+    12 placeholder. Lift when a real use case forces it.
+  - **Cardputer firmware.** Sprint 23c onward.
+
+### How to enable on the OPi5
+
+```sh
+pip install meshtastic                  # optional dep, lazy-imported
+export OVERSEER_LORA=sx1262             # or sx1278 / rylr998
+# optional: pin the serial device
+export OVERSEER_LORA_DEVICE=/dev/ttyUSB0
+python3 -m server
+```
+
+`curl http://localhost:6100/api/hw/lora` should then return
+`{"backend": "meshtastic", "node_id": <int>, "tx_count": 0, "rx_count": 0}`
+once the radio is up. Without the radio plugged in, you'll see
+`backend: "synthetic"` and a `last_error` field describing the
+bring-up failure.
+
+---
+
+## Sprint 23 scope (LoRa MVP + Cardputer field-relay firmware)
+
+Status: **pending — not started**. Scope defined 2026-05-23 after Ted
+asked whether the current build can broadcast small packets to remote
+devices if pushed onto an OPi5. Short answer at scoping time: **no**.
+v3 has no code that touches a radio. `server/hw.py` declares the
+`OVERSEER_LORA` env-var contract; no driver was written. Legacy
+`lora_bridge.py` (Meshtastic Python lib + Heltec V3 over USB-serial)
+exists in the repo but isn't imported by anything and only bridges the
+v1 text protocol. The Cardputer-Adv firmware that the mesh architecture
+diagram puts at the centre of the field topology has never been written
+— `deploy/cardputer/` is 64 lines of README + a 10-line JSON config
+example, no code.
+
+### Why this is a sprint, not a "Sprint 11+ TBD"
+
+The previous one-line "Sprint 23+ SDR / LoRa / Mesh + Cardputer + push"
+entry collapsed five unrelated workstreams into a single bullet that
+never moved. Sprint 23 is now scoped to **the LoRa mesh path
+end-to-end**: OPi5 transmits, mesh hops, Cardputer relays, phones see
+the v3 shell over a SoftAP. SDR and display work split out to Sprint 25
+(separate hardware paths, no dependency).
+
+### Topology (re-stated from `docs/03-MESH-ARCHITECTURE.md`)
+
+```
+  [phone] ── WiFi/SoftAP ──► [Cardputer-Adv (field relay)]
+                                    │
+                              LoRa  │  868 MHz / 915 MHz ISM
+                                    ▼
+                       [other Cardputers / Meshtastic nodes]
+                                    │
+                              LoRa  │  multi-hop, up to 7 hops
+                                    ▼
+                       [OPi5 Prime + LoRa USB device]
+```
+
+The Cardputer is the **field unit**. Phones in the field connect to
+**its SoftAP** (no internet required), reach a full v3 shell served
+from its flash, and any `/api/*` call gets translated into an OMP
+packet and ridden over LoRa to Prime, possibly through intermediate
+nodes. Both endpoints (OPi5 and every Cardputer) need a LoRa radio.
+
+### Architectural decision: Meshtastic as transport (not custom LoRa)
+
+OMP packets ride **inside Meshtastic data packets** (`PORTNUM_PRIVATE_APP`
+payload, ~200 B usable — fits a Brotli'd OMP packet). Rationale:
+
+  - Meshtastic already does what we'd otherwise spend months
+    rebuilding: mesh routing, AES-256 encryption, duty-cycle compliance
+    (EU 1% on 868 MHz, FCC 30 dBm on 915 MHz — both enforced by the
+    firmware), neighbour discovery, store-and-forward, position
+    beacons. All free, battle-tested, on the exact ESP32-S3 + SX1262
+    hardware we'd be buying anyway.
+  - Other people's Meshtastic nodes can relay our packets without
+    running our firmware. The 200-mile / multi-hop story comes from
+    the broader community plus any relay nodes we deploy.
+  - Proof point already in-repo: legacy `lora_bridge.py` uses the
+    `meshtastic` Python library against a Heltec V3 today. It works.
+    Sprint 23a lifts that plumbing into v3 transport.
+  - All hardware (Cardputer-Adv, Heltec V3, T-Beam, RAK4631) is
+    commercially sold for exactly this use case on ISM bands —
+    license-free, encryption permitted on ISM, standard hobbyist
+    territory.
+
+Rejected alternative: custom LoRa frames + our own mesh routing.
+Months of work re-inventing what Meshtastic already ships. Only worth
+revisiting if Meshtastic's per-packet payload cap or duty-cycle
+discipline blocks a concrete use case we can name. To be captured in
+**ADR-0016: Meshtastic-as-transport** (write alongside Sprint 23a).
+
+### Hardware shopping list (for Sprint 23 dev)
+
+  - **OPi5 side:** any Meshtastic-compatible USB device — Heltec V3 (~£25),
+    T-Beam (~£40), or RAK4631 (~£35). `meshtastic` Python lib is
+    indifferent to which.
+  - **Field side:** M5Stack Cardputer-Adv (the LoRa variant, ESP32-S3
+    + SX1262 + 1.14" colour LCD + 56-key keyboard, ~£70). Stock
+    Meshtastic firmware boots on it.
+  - **Optional second OPi5-side antenna:** a 5 dBi rubber duck on a
+    short SMA cable buys real range. The PCB antenna on the Heltec
+    is fine for bench testing.
+
+### Milestones — 23a/b are go/no-go gates for 23c–e
+
+#### 23a — LoRa MVP on OPi5 (3–5 days)
+
+  - Add `server/omp/lora_transport.py`: lifts the serial-to-Meshtastic
+    plumbing from `lora_bridge.py:LoraBridge` (`__init__`, `_listen`,
+    `_on_packet`, `send` methods), strips out the v1 text protocol,
+    keeps only `iface = meshtastic.serial_interface.SerialInterface(...)`.
+  - Hook it as a transport sink in `server/omp/server.py`: inbound
+    Meshtastic packets on `PORTNUM_PRIVATE_APP` → `decode()` → existing
+    OMP dispatch table → response → `encode()` → `iface.sendData(...)`.
+  - Wire into `hw.lora_backend()`: when `OVERSEER_LORA=sx1262|sx1278|rylr998`,
+    start the LoRa transport on boot; otherwise stay synthetic.
+  - Synthetic fallback per ADR-0014: bring-up failure (no serial device,
+    `meshtastic` import error, port not openable) attaches a
+    `_synthetic` flag, surfaces a DISABLED banner in the shell.
+  - Add `/api/hw` integration so the SIGNAL module's MESH indicator
+    reflects real radio state.
+  - **Gate:** with `OVERSEER_LORA=sx1262` and a Heltec V3 plugged into
+    the OPi5, `python tools/sim-mesh.py --target 192.168.1.x:6100 ping`
+    on a laptop with its own Heltec on the same channel succeeds —
+    end-to-end PING/PONG over the air, OMP-encoded.
+
+#### 23b — End-to-end OMP-over-Meshtastic spike (1–2 days)
+
+Validate the architectural decision before committing to firmware work.
+
+  - On a laptop with a Heltec V3 + `pip install meshtastic`, hand-craft
+    an OMP `HELLO` packet using `server/omp/codec.py:encode()`, send
+    as `PRIVATE_APP` payload to the OPi5's node ID.
+  - Verify OPi5 receives it, decodes, returns `HELLO_ACK`.
+  - Run a 5-minute soak: 1 packet/sec at SF9, log RSSI/SNR per
+    packet, confirm Meshtastic's duty-cycle limiter doesn't break OMP
+    flow. (At ~1 KB per OMP packet round-trip, well under 1% duty.)
+  - **Gate:** ≥95% packet success rate at 100 m line-of-sight, no
+    duty-cycle warnings logged. Fail → revisit transport decision.
+
+#### 23c — Cardputer firmware skeleton (~1 week)
+
+Smallest possible firmware: WiFi SoftAP + HTTP server + Meshtastic
+client app, **no shell hosting yet**. Confirms the on-device pipeline
+end-to-end before pulling in LittleFS + bundle delivery.
+
+  - ESP-IDF project at `deploy/cardputer/firmware/` (new). Target
+    Cardputer-Adv (ESP32-S3, 8 MB flash, 8 MB PSRAM).
+  - Stock Meshtastic firmware does NOT run as base — we run our own
+    ESP-IDF app that uses the Meshtastic protobuf library to talk to
+    the on-board SX1262. Decision: easier than running Meshtastic and
+    our app as side-by-side processes on a microcontroller.
+  - WiFi SoftAP on `OVERSEER-<callsign>` SSID. Open captive portal at
+    `http://192.168.4.1/`.
+  - `esp_http_server` on port 80. One route only: `GET /api/ping` →
+    builds OMP PING packet → TX over LoRa → wait for PONG (timeout
+    5 s) → return as JSON to phone.
+  - LCD shows: SSID, channel, last RSSI, packet counters (TX/RX/dropped).
+  - Reads `/spiffs/bridge.json` for callsign + LoRa mode (per
+    `deploy/cardputer/bridge-config.example.json`).
+  - **Gate:** phone on Cardputer SoftAP, hit `http://192.168.4.1/api/ping`
+    in browser, see `{"ok": true, "rtt_ms": <number>}`. Round-trip
+    goes phone → Cardputer (WiFi) → LoRa → OPi5 → LoRa → Cardputer →
+    phone. End-to-end proven.
+
+#### 23d — Cardputer firmware: read-only OMP + shell hosting (~1–2 weeks)
+
+  - LittleFS partition for the static v3 shell. Add `Makefile`
+    target that copies `shell/public/dist/` + `shell/public/index.html`
+    into `deploy/cardputer/firmware/spiffs/shell/` before `idf.py build`.
+  - HTTP server serves `/` (and `/v3/`) from LittleFS — phone gets the
+    same v3 shell it would get from Prime, just over SoftAP.
+  - HTTP→OMP translation middleware: per-route mapping table mirrors
+    `server/omp/opcodes.py`. Read-only routes only for this milestone
+    (no writes, no SQLite-affecting calls):
+    - `GET /api/n/waypoints` → OMP opcode (TBD, see below)
+    - `GET /api/n/terrain` → OMP opcode
+    - `GET /api/k/library/archives` → OMP opcode
+    - `GET /api/c/inbox` → OMP opcode
+    - `GET /api/hw` → OMP opcode
+  - Each read-only response from Prime is cacheable on the Cardputer
+    in PSRAM (TTL per ADR-0008 cache classes) so repeated phone
+    requests don't pound the radio.
+  - **OMP opcode expansion required:** Sprint 2 only defined PING/PONG/
+    HELLO + a few stubs. Read-only routes above need real opcodes
+    + handlers. Land alongside in `server/omp/opcodes.py` + handler
+    registration in the relevant `server/modules/*.py`.
+  - **Gate:** phone on Cardputer SoftAP, opens shell, NAVIGATION
+    waypoints sub-screen populates with real data from Prime 200 m
+    away over LoRa. All other sub-screens that need read-only data
+    work too.
+
+#### 23e — Cardputer firmware: write/sync + link UI polish (~1 week)
+
+  - Write opcodes: `POST /api/n/waypoint`, `POST /api/c/inbox/send`,
+    journal entries, MEDICAL run records. These cost more bandwidth
+    (write payloads can be larger) — add OMP fragmentation if a single
+    Meshtastic packet can't hold the payload (rare for the data shapes
+    we care about, but plumbing must exist).
+  - Outbox queue: writes that fail (no LoRa carrier, Prime unreachable)
+    persist to LittleFS, replay on link recovery. Mirror of the shell's
+    `idb_outbox.js` pattern.
+  - Link-quality UI: LCD shows neighbour list (callsign, RSSI, last
+    seen), packet success rate, current channel + SF. 56-key keyboard
+    used for callsign entry on first boot (otherwise read from
+    `bridge.json`).
+  - Boot chime + status LED patterns (per `bridge-config.example.json`'s
+    `boot_chime` field) for headless deployment.
+  - **Gate:** full v3 shell functional over Cardputer SoftAP at 1 km
+    line-of-sight (or 200 m through buildings). Phones can read AND
+    write; outbox queue survives a 60-second LoRa blackout.
+
+### Out of scope (deferred)
+
+  - **SDR / display backends** — moved to Sprint 25. Independent
+    hardware paths.
+  - **Custom LoRa mesh routing** — Meshtastic does it. Only revisit
+    if a concrete use case beats Meshtastic's per-packet cap or duty
+    cycle.
+  - **Cardputer running stock Meshtastic firmware in parallel with our
+    app** — investigated and rejected in 23c. We use the Meshtastic
+    protocol over our own application code; we don't run their full
+    firmware stack alongside.
+  - **Auto-OTA firmware updates over LoRa** — packet sizes too large
+    to be worth the duty cycle. Sneakernet for now.
+  - **End-to-end encryption beyond Meshtastic's AES-256** — channel
+    encryption is sufficient for v1. ADR-0012 covers the comms-crypto
+    layer if we later want per-operator E2E on top.
+
+### Risks
+
+  - **Meshtastic protobuf size on ESP32** — full protobuf runtime adds
+    ~40 KB to firmware. Acceptable on ESP32-S3 with 8 MB flash but
+    worth measuring early (23c).
+  - **Duty cycle on busy channels** — EU 1% means ~36 s of TX per hour
+    per node. Heavy v3 shell use (lots of polls, lots of writes) could
+    saturate it. Mitigations: aggressive caching on Cardputer side
+    (ADR-0008 TTLs), OMP delta-sync for COMMS/NAVIGATION (KNOWLEDGE
+    pattern from ADR-0007 generalises).
+  - **Cardputer-Adv availability + spec uncertainty** — confirm the
+    LoRa variant is in stock and that its SX1262 is on standard
+    EU/US ISM frequencies before ordering more than one for dev.
+  - **OMP opcode table is mostly stubs (Sprint 2)** — 23d will need
+    to materialise real handlers for at least the read paths it
+    exposes. Don't underestimate this; it's the work that connects
+    the OMP plumbing to actual module data. Track in 23d, not as a
+    later cleanup.
+  - **The "moving target" risk** — `lora_bridge.py` is v1 code that
+    pre-dates the v3 design. Don't over-fit 23a to it; lift the bits
+    that work (serial bring-up, packet RX/TX) and write the rest
+    fresh against v3 conventions (ADR-0014 adapter pattern,
+    synthetic-fallback contract, blueprint registration).
+
+### Deliverables checklist (for the "done" gate)
+
+  - `server/omp/lora_transport.py` (23a)
+  - `server/omp/opcodes.py` extended with real read-path opcodes (23d)
+  - Module handlers wired for those opcodes (23d)
+  - `tests/unit/test_lora_transport.py` — synthetic-fallback + happy-path
+  - `tests/unit/test_omp_codec.py` — already exists, extend with
+    end-to-end Meshtastic envelope round-trip fixture
+  - `deploy/cardputer/firmware/` ESP-IDF project (23c, expanded 23d/e)
+  - `deploy/cardputer/Makefile` — bundle-copy + build target
+  - `deploy/systemd/overseer.service` — Linux service for OPi5 deploy
+    (separate but should land in same sprint window so OPi5 is
+    one-command deployable end-to-end)
+  - `docs/architecture-decisions/0016-meshtastic-as-transport.md`
+  - `docs/STATUS.md` — Sprint 23a–e deliverables sections as each
+    milestone lands
+
+---
+
+## Sprint 24 scope (TRACKER — send-the-score audio over mesh)
+
+Status: **pending — not started**. Scope defined 2026-05-23 after Ted
+asked whether compressed TOML "scores" from the sibling `c:\source\tracker`
+project could be transmitted over Meshnet and played back on phones /
+Linux / Windows.
+
+### Why this fits OVERSEER
+
+Same architectural insight as the sextant text-map (ADR-0015) and the
+KNOWLEDGE delta-sync (ADR-0007): **send the source representation,
+render locally**. The bandwidth gain is dramatic — Brotli-compressed
+TOML on the reference track `riddle_me_this.toml`:
+
+| Form | Size | LoRa packets (SF12, ~178 B payload) |
+|---|---|---|
+| TOML source | 8772 B | 50 |
+| gzip -9 | 2054 B | 12 |
+| **Brotli -q 11** | **1726 B** | **~8** |
+| MP3 bounce | 1.6 MB | ~9 400 |
+| WAV bounce | 19 MB | ~110 000 |
+
+A full DJ track ships in ~8 LoRa packets / a single Meshtastic chunk.
+Once each peer has the engine and the drum-sample pack cached (one-time
+~704 KB pack over WiFi or sneakernet), every future song is 1-2 KB.
+
+### Architecture decision: path 2 (WASM + Web Audio)
+
+Three player paths were considered; path 2 picked because it aligns with
+the "monospace, universal, no install" ethos of the rest of OVERSEER
+and reuses the existing v3 shell as the player UI on every platform
+(Android Chrome, iOS Safari ≥17, Linux Firefox, Windows desktop).
+
+  1. Rust → native binaries per platform (cargo cross-compile, JNI/Tauri
+     for Android). Best perf, three install paths to maintain. Escape
+     hatch if 24a latency bench fails.
+  2. **AudioWorklet engine + Web Audio API in the v3 shell.** Chosen.
+  3. Server-side bounce to MP3 on Overseer Prime. Punts on bandwidth
+     win; only useful if WASM perf is inadequate (it won't be).
+
+### Reference projects
+
+  - `c:\source\tracker` — Rust acid-techno engine. **Early-stage, will be
+    revised considerably.** Sprint 24 must port the *concepts and TOML
+    grammar*, not pin to any specific engine commit. Source LOC at time
+    of scoping: `src/` = 1837 lines total, of which `dsp/` + `engine/`
+    ≈ 1200 lines (the translation target).
+  - `c:\source\tracker\visualizer\` — CRT-styled web frontend
+    (`index.html` 165, `viz.js` 247, `style.css` 201 = 613 lines total).
+    **Directly liftable** — uses the browser's AnalyserNode for the
+    spectrum (no FFT port needed), pure CSS for the SL-1210 turntables
+    and CRT scanlines. Aesthetic translates straight into the v3 shell.
+
+### Milestones — 24a is a go/no-go gate for 24b–f
+
+#### 24a — Latency spike (go/no-go)
+
+Port one voice (the 303 voice — most expensive — *or* the kick sampler
+if simpler is preferred for the first pass) to an AudioWorklet. Trigger
+from a Play button in a throwaway page. Measure end-to-end latency on:
+
+  - A 2022+ Android phone via Chrome (Pixel 6 / S22 class baseline)
+  - iPhone 13+ via Safari (iOS 17+)
+  - Desktop Linux Firefox
+
+Pass criteria: **<30 ms input-to-audio latency, no audible glitches at
+128-sample buffer over 60 s sustained playback, <5% main-thread CPU**.
+
+Fail → fall back to path 1 (native) and rescope. Don't proceed to 24b
+on hope.
+
+#### 24b — Wire format + sample pack protocol
+
+  - Lock TOML v1 schema (subset of the current tracker grammar that the
+    WASM engine implements). Document at `docs/08-TRACKER-FORMAT.md`.
+  - New OMP message type `song.v1`: Brotli-compressed TOML + sample-pack
+    SHA-256 + (optional) cover art ref. Wire through the existing OMP
+    envelope (ADR-0006 msgpack codec).
+  - Sample-pack manifest endpoint `/api/t/pack/manifest` returns
+    `{hash, version, file_count, total_bytes, samples: [{name, sha256, size}]}`.
+  - Peer fetches the pack once over WiFi via `/api/t/pack/<sha256>.tar`
+    (or zip — decide). Cached in IndexedDB / SQLite per-platform.
+  - Player refuses to play songs whose pack hash doesn't match a cached
+    pack — surfaces a "missing samples (pack {hash})" DISABLED banner.
+
+#### 24c — Engine port
+
+Translate `tracker/src/dsp/` + `tracker/src/engine/` to TypeScript
+AudioWorklet. Keep the structure close to the Rust so future engine
+revisions in the Rust source can be re-translated cheaply.
+
+  - `dsp/osc.ts` — PolyBLEP saw + square
+  - `dsp/ladder.ts` — Huovilainen 4-pole nonlinear ladder, 2× OS
+  - `dsp/env.ts`, `dsp/drive.ts`, `dsp/util.ts`, `dsp/biquad.ts`,
+    `dsp/delay.ts`
+  - `engine/voice303.ts` — the 303 voice
+  - `engine/sampler.ts` — polyphonic sample voice
+  - `engine/sequencer.ts` — pattern stepping
+  - `engine/ducker.ts` — sidechain
+  - `engine/mixer.ts` — master sat + limiter
+  - All buffers preallocated. **No allocations in the audio thread.**
+  - Determinism check: bit-identical (or near-identical, ±LSB) output
+    vs the Rust bounce for the reference track, across Chrome / Safari /
+    Firefox. Float-determinism caveats documented if hit.
+
+Add a **draft mode** toggle: skip 2× oversampling + use the cheaper
+biquad LPF in place of the ladder. Sounds 90% as good for preview,
+costs ~⅓ the CPU. Default ON for mobile, OFF for desktop.
+
+#### 24d — TRACKER module in v3 shell
+
+Hotkey TBD (suggest `J` — unused per current HELP HOTKEYS list, fits
+"jam"). Sub-screens:
+
+  - `L`ibrary — received songs, by date/sender/title. Backed by a new
+    `tracker_song` SQLite table (migration 016).
+  - `P`lay — engine view; play/pause, position, BPM, current pattern,
+    visualizer pane.
+  - `U`pload — paste TOML or pick a file; validates + Brotli + sends as
+    `song.v1` OMP message to a peer or board.
+  - `S`ample pack status — show cached pack hash, total size, "fetch
+    over WiFi" action if a peer advertises a newer pack.
+
+Backend: `server/modules/tracker.py` with the standard `register(app)`
+shape; SQLite migration; blueprint at `/api/t/`. Endpoints:
+`/api/t/songs`, `/api/t/song/<id>`, `/api/t/upload`, `/api/t/pack/manifest`,
+`/api/t/pack/<hash>`.
+
+#### 24e — Visualizer lift
+
+Port `c:\source\tracker\visualizer\` into the shell as
+`shell/src/modules/tracker/visualizer/`. Adapt the palette to the
+terminal tokens (`--amber`, `--cyan`, `--fg-bright`). Keep:
+
+  - 32-band spectrum (browser AnalyserNode, no FFT port)
+  - Scope (waveform from a script processor or worklet ring buffer)
+  - RMS meters
+  - Step grid synced to the sequencer
+  - Twin SL-1210 turntable animations (pure CSS)
+  - CRT scanlines, vignette, phosphor flicker
+
+The CRT effects ride on top of the existing v3 chrome — should look like
+"the tracker visualizer dropped inside the OVERSEER terminal frame", not
+a separate viewer that breaks aesthetic continuity.
+
+#### 24f — Bench + polish
+
+  - 60-minute soak test on the Android baseline phone — no buffer
+    underruns, no audio thread crashes.
+  - Memory budget: <50 MB heap at steady state with one song loaded and
+    the sample pack cached.
+  - DISABLED banner if AudioContext can't be created (rare but happens
+    on locked-down Android profiles).
+  - HELP entry + ADR-0016 documenting the send-the-score decision.
+
+### Out of scope (deferred to Sprint 24+)
+
+  - Real-time collaborative jamming (live performance streaming) — much
+    harder problem (network jitter, drift correction). Not needed for v1.
+  - Native player binaries (path 1) — only revisit if path 2 fails 24a.
+  - Compression beyond Brotli — already at 1.7 KB; further wins not
+    worth complexity until somebody hits a real wall.
+  - Custom sample packs — v1 uses one canonical pack distributed by
+    Overseer Prime. Pack authoring UX is a v2 concern.
+
+### Risks
+
+  - **AudioWorklet on iOS Safari** — solid from iOS 17+ but historically
+    a source of headaches. 24a explicitly benches Safari before commit.
+  - **Float determinism across engines** — if Chrome and Safari diverge
+    by more than ±1 LSB, "everyone hears the same thing" weakens.
+    Mitigation: ship a Rust → WASM build of the engine itself (via
+    wasm-pack) as a fallback if hand-ported TS drifts. Bigger bundle
+    (~150 KB extra) but bit-identical to the Rust bounce.
+  - **The tracker engine is moving** — Sprint 24 ports concepts, not a
+    pinned commit. Schema and module structure should anticipate engine
+    revisions without protocol breakage. Wire format (Brotli TOML +
+    pack hash) is the stable contract; the engine implementation behind
+    it can change.
+
+---
+
+## Sprint 22.6 deliverables (Map dual-mode restore — sextant default)
+
+Scope: restore the sextant text-map as the default NAVIGATION map view.
+Sprint 21 had silently flipped the default to Leaflet, contradicting
+`docs/06-TEXT-MAP-SYSTEM.md` ("the text map is the *primary* low-bandwidth
+view... what every operator on every transport sees by default"). Ted
+caught the regression during local testing on 2026-05-22 and chose
+dual-mode rather than a full Leaflet rip-out: ASCII primary per spec,
+Leaflet retained as an opt-in WiFi-only detail view.
+
+`shell/src/modules/navigation.js`:
+  - `paintMap()` now dispatches on `local.mapMode` (default `"text"`).
+  - `paintTextMap()` fetches `/api/n/terrain` (already on backend since
+    Sprint 8a) and renders via `rasterize()` from `shell/src/sextant/`.
+    Bitmap is 120×72 → ~24 sextant rows × 60 cells.
+  - `paintGraphicalMap()` retains the Sprint 21 Leaflet + MBTiles path
+    unchanged, including the no-tiles DISABLED banner.
+  - `T` and `G` keys toggle modes while in the M sub-screen.
+  - Shared `tearDownLeaflet()` cleans up the Leaflet instance + GPS poll
+    on mode-switch or unmount.
+  - Below the text map: compact waypoint legend (bearing / cardinal /
+    name / cat / distance) computed from operator position — mirrors
+    the C sub-screen's compass list.
+
+`shell/src/modules/navigation.css`:
+  - `.nav-map-toggle` + `.nav-map-mode-btn` for the T/G toggle row.
+  - `.nav-map` styles the sextant `<pre>` (monospace, terminal palette).
+  - `.nav-leaflet-map` styles + Leaflet popup theming retained verbatim.
+
+`tools/smoke-shell.mjs`:
+  - Default-mode assertion: `pre.nav-map` present with rendered content.
+  - G-toggle assertion: Leaflet container mounts + no-tiles banner shows.
+  - T-toggle assertion: returns to sextant `<pre>`, Leaflet container
+    torn down (no DOM leak).
+
+`docs/architecture-decisions/0015-map-dual-mode.md` (new):
+  - Codifies ASCII-primary, supersedes the implicit Sprint 21 decision.
+  - References ADR-0009 (sextant as system-wide primitive) and the
+    bandwidth math in `docs/06-TEXT-MAP-SYSTEM.md`.
+
+No backend changes — `/api/n/terrain` (`server/modules/navigation.py:712`)
+was still serving the bitmap; only the shell needed re-wiring.
 
 ---
 

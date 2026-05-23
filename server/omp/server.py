@@ -17,6 +17,12 @@ serve a roundtrip') passes:
   POWER_NOW         stubbed canned response (Sprint 3 replaces)
 
 Anything outside this set returns ERROR (op = 0x06) with code 'NOT_IMPL'.
+
+Sprint 23a (OMP-over-LoRa): dispatch logic factored into
+``server.omp.lora_transport.dispatch_packet`` so the HTTP route here
+and the LoRa pubsub callback share a single source of truth. The HTTP
+route still owns its Flask plumbing and wire-version echo; only the
+"decode → handler → encode" core is shared.
 """
 
 from __future__ import annotations
@@ -26,7 +32,6 @@ from typing import Any, Callable
 
 from flask import Blueprint, Response, request
 
-from server.omp.codec import decode, encode
 from server.omp.opcodes import Op
 
 omp_bp = Blueprint("omp", __name__)
@@ -95,40 +100,16 @@ def _power_now(_payload):
 @omp_bp.route("/omp", methods=["POST"])
 def omp_endpoint():
     """Single-packet OMP roundtrip. Body is one OMP request packet,
-    response body is one OMP response packet (same msg_id)."""
-    try:
-        op, msg_id, payload = decode(request.get_data())
-    except (ValueError, NotImplementedError) as e:
-        return _error_packet(0, msg_id_or=0, code="DECODE", msg=str(e))
+    response body is one OMP response packet (same msg_id).
 
-    fn = _HANDLERS.get(op)
-    if fn is None:
-        return _error_packet(op, msg_id_or=msg_id, code="NOT_IMPL",
-                             msg=f"opcode 0x{op:02x} not in Sprint 2 dispatch")
-
-    try:
-        response = fn(payload)
-    except Exception as e:  # noqa: BLE001 -- surface as ERROR opcode
-        return _error_packet(op, msg_id_or=msg_id, code="HANDLER_THREW", msg=str(e))
-
-    # Some handlers return a sentinel dict {"op": Op.HELLO_ACK, ...} to
-    # indicate that the response opcode is different from the request
-    # (e.g. HELLO -> HELLO_ACK). Otherwise echo the request opcode.
-    out_op = op
-    if isinstance(response, dict) and "op" in response and isinstance(response["op"], int):
-        out_op = response.pop("op")
-
-    # Echo the request's wire version so JS clients (Sprint 4: v0x01 only,
-    # ADR-0010) get an uncompressed response while Cardputer clients
-    # (future) get the compressed v0x02 path.
-    req_version = request.get_data()[0] if request.get_data() else 0x02
-    body = encode(out_op, msg_id, response, version=req_version)
+    Wire version is echoed: v0x01 JS clients (ADR-0010) get
+    uncompressed responses; v0x02 clients get Brotli'd responses.
+    Dispatch core lives in server.omp.lora_transport so the LoRa
+    path shares it.
+    """
+    from server.omp.lora_transport import dispatch_packet  # noqa: WPS433
+    body = dispatch_packet(request.get_data())  # version=None → echo
     return Response(body, mimetype="application/octet-stream")
-
-
-def _error_packet(req_op: int, msg_id_or: int, code: str, msg: str) -> Response:
-    body = encode(Op.ERROR, msg_id_or & 0xFFFF, {"req_op": int(req_op), "code": code, "msg": msg})
-    return Response(body, mimetype="application/octet-stream", status=200)
 
 
 def register(app):

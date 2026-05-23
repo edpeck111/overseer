@@ -4,6 +4,7 @@ from legacy_server import app  # noqa: F401
 
 from server import ws as _ws
 from server.omp import server as _omp_server
+from server.omp import lora_transport as _lora_transport
 from server.modules import comms as _comms
 from server.modules import medical as _medical
 from server.modules import navigation as _navigation
@@ -33,6 +34,13 @@ _signal.register(app)
 _recreation.register(app)
 _system.register(app)
 _hw.register(app)
+_lora_transport.register(app)
+
+# Bring up the LoRa transport now (synthetic by default; real if
+# OVERSEER_LORA is set). Lazy bring-up would defer warnings until the
+# first packet, which is too late — surface configuration problems at
+# server boot per ADR-0014.
+_lora_transport.get_transport()
 
 __all__ = ["app"]
 
