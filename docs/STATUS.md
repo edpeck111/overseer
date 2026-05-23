@@ -1,6 +1,6 @@
 # OVERSEER v3 — status board
 
-**Last updated:** end of Sprint 23a — 2026-05-23.
+**Last updated:** end of Sprint 23b software-side — 2026-05-23.
 
 ---
 
@@ -9,14 +9,18 @@
   - HEAD ahead of `origin/v3-redesign` (`4a0f791`) by the Sprint 22.6
     map-dual-mode restore. ADR-0015 added; sextant text-map is the
     NAVIGATION default again, with Leaflet as a `G`-key opt-in.
-  - Sprints **0–22 + 22.6 + 23a done**. Next queue, all scoped:
-    - **Sprint 23a — DONE.** OPi5 LoRa transport (`server/omp/lora_transport.py`),
-      Meshtastic-as-transport decision codified (ADR-0016), 17 new
-      pytest, /api/hw/lora endpoint. Synthetic-fallback path is
-      CI-green; hardware-on-the-air gate runs in 23b once a Heltec
-      is on the OPi5.
-    - **Sprint 23b–e** — Cardputer firmware path. Pending. OMP packets
-      already ride `PRIVATE_APP` payloads on the OPi5 side.
+  - Sprints **0–22 + 22.6 + 23a done; 23b software-complete**.
+    Next queue:
+    - **Sprint 23a — DONE.** OPi5 LoRa transport
+      (`server/omp/lora_transport.py`), Meshtastic-as-transport
+      decision codified (ADR-0016), 17 new pytest, /api/hw/lora
+      endpoint.
+    - **Sprint 23b — SOFTWARE DONE.** Bench tool
+      (`tools/lora-spike.py`), 13 new pytest, runbook at
+      `docs/SPRINT-23b-RUNBOOK.md`. Hardware-on-the-air gate runs
+      when Ted has both Heltecs in hand.
+    - **Sprint 23c–e** — Cardputer firmware path. Blocked on 23b's
+      on-air gate.
     - **Sprint 24** — TRACKER audio module (WASM AudioWorklet, draws
       on `c:\source\tracker`).
     - **Sprint 25** — SDR + display backends + Cardputer polling
@@ -70,7 +74,7 @@ git push -u origin v3-redesign
 | 22     | Real hardware round 1: GPS + POWER     | done     | ✓ |
 | 22.6   | Map dual-mode restore (sextant default)| done     | ✓ |
 | 23a    | LoRa MVP — OPi5 side via Meshtastic    | done     | ✓ |
-| 23b    | End-to-end OMP-over-Meshtastic spike   | pending  | — |
+| 23b    | End-to-end OMP-over-Meshtastic spike   | sw-done  | ⊘ |
 | 23c    | Cardputer firmware skeleton            | pending  | — |
 | 23d    | Cardputer firmware — read-only OMP     | pending  | — |
 | 23e    | Cardputer firmware — write/sync + UI   | pending  | — |
@@ -97,6 +101,84 @@ Test breakdown (357 total):
 
 Smoke: updated text-map assertion replaced with Leaflet map + no-tiles-banner
 check; /api/hw mock added; all prior assertions still passing.
+
+---
+
+## Sprint 23b deliverables (OMP-over-Meshtastic spike — software side)
+
+Landed 2026-05-23. **Status:** software-complete; hardware-on-the-air
+gate runs separately on the OPi5 + laptop pair per the runbook below
+and gets a stamp here when it passes.
+
+### What landed
+
+`tools/lora-spike.py` (new, ~370 lines):
+  - Cross-platform CLI for the 23b bench. Three commands: `ping`
+    (single round-trip), `hello` (HELLO/HELLO_ACK with callsign echo),
+    `soak --duration --rate --csv` (the gate run).
+  - **`--hardware`** mode: opens a Meshtastic-compatible USB radio via
+    `meshtastic.serial_interface.SerialInterface`, sends OMP packets as
+    `PRIVATE_APP` payloads, awaits responses via pubsub. Per-packet
+    msg_id match (response keyed off the 2-byte msg_id in the OMP
+    header). Records `rxRssi` / `rxSnr` from the Meshtastic packet
+    metadata.
+  - **`--loopback`** mode: drives the in-process `SyntheticLora` so the
+    spike script itself can be smoke-tested without radios. Adds
+    deterministic latency + bounded jitter so the soak's summary stats
+    are non-degenerate.
+  - Output: live per-packet line (OK/X marker, msg_id, RTT, RSSI, SNR,
+    error), optional CSV (msg_id, sent_at, response_at, rtt_ms,
+    rssi_dbm, snr_db, error), final summary (count, success %,
+    p50/p95/p99 RTT, mean RSSI/SNR), exit code 0 iff `success_rate
+    >= 95.0` (Sprint 23b gate enforced by the tool).
+  - Node-ID parsing: decimal (`12345`), hex (`0xdeadbeef`),
+    Meshtastic-style (`!deadbeef`), or broadcast (`^all` / empty).
+
+`tests/unit/test_lora_spike.py` (new, 13 tests):
+  - `LoopbackTransport` round-trips and synthetic RSSI/SNR in expected
+    bands.
+  - `cmd_ping` / `cmd_hello` / `cmd_soak` exit-code + stdout contracts.
+  - CSV output shape verified end-to-end.
+  - Node-ID parsing across all four forms.
+  - CLI argument validation: rejects both transports specified, rejects
+    neither specified, accepts `--loopback` for ping and short soak.
+  - Summary edge cases: zero packets / all-fail both return `GATE FAIL`.
+
+`docs/SPRINT-23b-RUNBOOK.md` (new):
+  - Two-radio bring-up instructions: stock Meshtastic firmware via the
+    Web Flasher, identical region + channel + PSK on both ends,
+    `meshtastic --info` to capture node IDs.
+  - Prime-side enable: `OVERSEER_LORA=sx1262`, `curl /api/hw/lora` to
+    verify the real backend came up.
+  - Client-side run sequence: hardware ping, hello, then the 5-minute
+    soak that produces the gate evidence.
+  - Pass criteria, failure modes with diagnostic steps, "what to do
+    when this passes" / "what to do when this fails" (don't proceed
+    to 23c on a failed transport bench — open a thread first).
+
+### What 23b does NOT land
+
+  - **Hardware results.** This sprint ships the bench tool, not the
+    bench run. The on-air gate happens when Ted has both radios in
+    hand; results paste into a `## Sprint 23b on-air gate evidence`
+    section here when it's done.
+  - **OMP fragmentation.** `server/omp/codec.py` still has the Sprint
+    12 placeholder. Soak runs at 1 Hz PING which fits one packet, so
+    no fragmentation is exercised by this bench.
+  - **Cardputer firmware.** Sprint 23c is unblocked once 23b's
+    hardware gate stamps.
+
+### Gate
+
+| Check | Result |
+|---|---|
+| Loopback ping returns PONG with `server_time` | ✓ |
+| Loopback hello returns HELLO_ACK with callsign echo | ✓ |
+| Loopback soak at 20 Hz × 0.3 s → GATE PASS | ✓ |
+| Loopback soak writes valid CSV | ✓ |
+| All 13 spike tests pass | ✓ (427 total pytest) |
+| Hardware-on-the-air bench (5-min soak) | **pending** |
+| Shell smoke ALL CHECKS PASSED | ✓ |
 
 ---
 
