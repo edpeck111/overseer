@@ -1,0 +1,68 @@
+[Unit]
+# OVERSEER v3 Flask backend — long-running service on Overseer Prime (OPi5 Max).
+# Sprint 23 deliverable: makes the OPi5 one-command deployable
+# (`systemctl enable --now overseer`) instead of needing a manual
+# `python3 -m server` under tmux.
+Description=OVERSEER v3 backend (Flask + OMP + LoRa transport)
+Documentation=file:/opt/overseer/docs/STATUS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Adjust ``User`` + ``WorkingDirectory`` + ``ExecStart`` to match the
+# install layout on Overseer Prime. The defaults assume a single
+# operator account at ``overseer`` with the repo at ``/opt/overseer``
+# and a virtualenv at ``/opt/overseer/.venv``.
+User=overseer
+Group=overseer
+WorkingDirectory=/opt/overseer
+
+# Real hardware backends: uncomment + edit the env lines below as
+# devices are attached. Defaults (nothing set) keep every backend on
+# synthetic — server boots clean on any box.
+#
+# Environment=OVERSEER_LORA=sx1262
+# Environment=OVERSEER_LORA_DEVICE=/dev/ttyUSB0
+# Environment=OVERSEER_GPS=serial
+# Environment=OVERSEER_GPS_DEVICE=/dev/ttyUSB1
+# Environment=OVERSEER_POWER=ina226
+#
+# MBTILES_PATH overrides /opt/overseer/tools/tiles/uk.mbtiles for the
+# graphical-mode map (NAVIGATION 'G' toggle). Leave unset to use the
+# default; the v3 map defaults to sextant text-mode so MBTiles is
+# optional even when the M sub-screen is in use.
+# Environment=MBTILES_PATH=/srv/tiles/uk.mbtiles
+
+# Python venv. If you install dependencies system-wide, replace with
+# /usr/bin/python3 and drop the venv path.
+ExecStart=/opt/overseer/.venv/bin/python3 -m server
+
+# Graceful stop: SIGINT lets Flask drain in-flight requests; SIGKILL
+# after 10 s if the process is wedged (e.g. a stuck serial port).
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+# Restart on crash but not on a clean exit (so `systemctl stop` stays
+# stopped instead of fighting a restart loop).
+Restart=on-failure
+RestartSec=5
+
+# stdout + stderr go to the journal — view with `journalctl -u overseer`.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=overseer
+
+# Light hardening. The server needs network + serial; nothing else.
+# Adjust if a future module needs more (e.g. SDR via libusb).
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+# Serial devices live under /dev; uncomment if you want stricter
+# device isolation (you'll need to whitelist /dev/ttyUSB* + /dev/spidev*).
+# PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

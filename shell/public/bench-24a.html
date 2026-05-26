@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>OVERSEER · Sprint 24a bench</title>
+<style>
+  :root {
+    --bg: #0a0e0a;
+    --bg-panel: #11161a;
+    --fg: #b5d6b5;
+    --fg-bright: #e8f5e8;
+    --fg-dim: #6a8a6a;
+    --amber: #ffb849;
+    --rule: #1f2a26;
+    --pass: #4fff8c;
+    --fail: #ff5a5a;
+    --warn: #ffb849;
+    --mono: 'JetBrains Mono', 'Cascadia Code', 'Iosevka', 'Menlo', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--mono); font-size: 14px; line-height: 1.4;
+    -webkit-text-size-adjust: 100%; min-height: 100%;
+  }
+  body { padding: 16px; max-width: 720px; margin: 0 auto; }
+  h1 { margin: 0 0 4px 0; font-size: 1.1em; color: var(--fg-bright); letter-spacing: 0.05em; }
+  h2 { margin: 18px 0 6px 0; font-size: 0.9em; color: var(--amber); letter-spacing: 0.1em; text-transform: uppercase; }
+  .subtitle { color: var(--fg-dim); font-size: 0.85em; margin-bottom: 16px; }
+  .card { background: var(--bg-panel); border: 1px solid var(--rule); padding: 12px; margin-bottom: 12px; }
+  .card.gate-pass { border-color: var(--pass); }
+  .card.gate-fail { border-color: var(--fail); }
+  .row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+  .row .k { color: var(--fg-dim); }
+  .row .v { color: var(--fg-bright); font-variant-numeric: tabular-nums; text-align: right; }
+  .row.pass .v { color: var(--pass); }
+  .row.fail .v { color: var(--fail); }
+  .row.warn .v { color: var(--warn); }
+  button.play {
+    width: 100%; padding: 18px; font-family: inherit; font-size: 1.1em;
+    background: var(--bg-panel); color: var(--amber); border: 1px solid var(--amber);
+    letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button.play:active { background: var(--amber); color: var(--bg); }
+  button.play:disabled { color: var(--fg-dim); border-color: var(--rule); cursor: default; }
+  .verdict { font-size: 1.3em; padding: 12px; text-align: center; letter-spacing: 0.15em; }
+  .verdict.pass { color: var(--pass); }
+  .verdict.fail { color: var(--fail); }
+  .verdict.pending { color: var(--fg-dim); }
+  .log { font-size: 12px; color: var(--fg-dim); max-height: 180px; overflow-y: auto;
+         background: var(--bg); padding: 8px; border: 1px solid var(--rule); }
+  .log .err { color: var(--fail); }
+  .meta { color: var(--fg-dim); font-size: 0.8em; padding-top: 8px; border-top: 1px dashed var(--rule); margin-top: 12px; }
+  code { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<h1>OVERSEER · Sprint 24a bench</h1>
+<div class="subtitle">
+  AudioWorklet latency spike — 303 voice DSP (PolyBLEP saw → 4-pole nonlinear ladder
+  × 2× oversample → tanh cascade → AD env). Validates ADR-0016-adjacent TRACKER
+  decision before Sprint 24b–f commits to the WASM-audio path.
+</div>
+
+<div class="card">
+  <h2>Gate</h2>
+  <div class="row"><span class="k">input-to-audio latency</span><span class="v">&lt; 30 ms</span></div>
+  <div class="row"><span class="k">worklet CPU (steady-state)</span><span class="v">&lt; 5 %</span></div>
+  <div class="row"><span class="k">audio glitches (60 s soak)</span><span class="v">0</span></div>
+</div>
+
+<div class="card" id="results-card">
+  <h2>Live readout</h2>
+  <div class="row"><span class="k">state</span><span class="v" id="r-state">idle</span></div>
+  <div class="row"><span class="k">elapsed</span><span class="v" id="r-elapsed">--</span></div>
+  <div class="row" id="row-latency"><span class="k">latency (press → audio)</span><span class="v" id="r-latency">--</span></div>
+  <div class="row" id="row-cpu"><span class="k">worklet CPU (mean)</span><span class="v" id="r-cpu">--</span></div>
+  <div class="row"><span class="k">worklet CPU (max-buffer)</span><span class="v" id="r-cpu-max">--</span></div>
+  <div class="row" id="row-glitch"><span class="k">glitches</span><span class="v" id="r-glitch">0</span></div>
+  <div class="row"><span class="k">buffers processed</span><span class="v" id="r-buffers">0</span></div>
+  <div class="row"><span class="k">main-thread frame stalls</span><span class="v" id="r-rafstall">0</span></div>
+  <div class="row"><span class="k">AudioContext.outputLatency</span><span class="v" id="r-outlat">--</span></div>
+  <div class="row"><span class="k">AudioContext.baseLatency</span><span class="v" id="r-baselat">--</span></div>
+  <div class="row"><span class="k">sample rate</span><span class="v" id="r-sr">--</span></div>
+</div>
+
+<div class="card" id="verdict-card">
+  <div class="verdict pending" id="verdict">PENDING — run the soak</div>
+</div>
+
+<button class="play" id="btn-play">Start 60-second soak</button>
+
+<div class="card">
+  <h2>Run log</h2>
+  <div class="log" id="log"></div>
+  <div class="meta">
+    Press the button, listen on speakers or headphones. Page must be served over HTTPS
+    (or http://localhost) for AudioWorklet to load. Open this on a 2022+ phone / iPhone 13+ / desktop.
+    Worklet source: <code>bench-24a-worklet.js</code>.
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  state: $('r-state'), elapsed: $('r-elapsed'),
+  latency: $('r-latency'), rowLatency: $('row-latency'),
+  cpu: $('r-cpu'), cpuMax: $('r-cpu-max'), rowCpu: $('row-cpu'),
+  glitch: $('r-glitch'), rowGlitch: $('row-glitch'),
+  buffers: $('r-buffers'), rafstall: $('r-rafstall'),
+  outlat: $('r-outlat'), baselat: $('r-baselat'), sr: $('r-sr'),
+  verdict: $('verdict'), verdictCard: $('verdict-card'),
+  resultsCard: $('results-card'),
+  log: $('log'), btnPlay: $('btn-play'),
+};
+
+const SOAK_DURATION_MS = 60_000;
+const GATE = { latencyMs: 30, cpuPct: 5, glitches: 0 };
+
+const state = {
+  audioCtx: null,
+  node: null,
+  pressTimeMs: null,
+  firstAudioTimeMs: null,
+  latencyMs: null,
+  meanCpuPct: null,
+  maxCpuPct: 0,
+  glitches: 0,
+  buffers: 0,
+  rafStalls: 0,
+  rafLast: null,
+  rafReq: null,
+  soakStart: null,
+  running: false,
+};
+
+function log(msg, cls) {
+  const ts = new Date().toISOString().slice(11, 23);
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = `${ts}  ${msg}`;
+  els.log.appendChild(line);
+  els.log.scrollTop = els.log.scrollHeight;
+}
+
+function setRow(rowEl, valEl, value, pass) {
+  valEl.textContent = value;
+  rowEl.classList.remove('pass', 'fail', 'warn');
+  if (pass === true) rowEl.classList.add('pass');
+  else if (pass === false) rowEl.classList.add('fail');
+  else if (pass === 'warn') rowEl.classList.add('warn');
+}
+
+function evaluateGate() {
+  const lOk = state.latencyMs !== null && state.latencyMs < GATE.latencyMs;
+  const cOk = state.meanCpuPct !== null && state.meanCpuPct < GATE.cpuPct;
+  const gOk = state.glitches <= GATE.glitches;
+  setRow(els.rowLatency, els.latency,
+    state.latencyMs === null ? '--' : state.latencyMs.toFixed(1) + ' ms',
+    state.latencyMs === null ? null : lOk);
+  setRow(els.rowCpu, els.cpu,
+    state.meanCpuPct === null ? '--' : state.meanCpuPct.toFixed(2) + ' %',
+    state.meanCpuPct === null ? null : cOk);
+  setRow(els.rowGlitch, els.glitch, String(state.glitches), gOk);
+  return { lOk, cOk, gOk };
+}
+
+function setVerdict(kind, text) {
+  els.verdict.className = 'verdict ' + kind;
+  els.verdict.textContent = text;
+  els.verdictCard.classList.remove('gate-pass', 'gate-fail');
+  if (kind === 'pass') els.verdictCard.classList.add('gate-pass');
+  if (kind === 'fail') els.verdictCard.classList.add('gate-fail');
+}
+
+function rafLoop(now) {
+  if (state.rafLast !== null) {
+    const delta = now - state.rafLast;
+    // 60 Hz display ≈ 16.7 ms; treat anything over 33 ms as a stall
+    // (two-frame skip). On a 120 Hz device this fires harder; that's
+    // a fair signal — the main thread isn't keeping up with its budget.
+    if (delta > 33) state.rafStalls++;
+  }
+  state.rafLast = now;
+  if (state.soakStart !== null) {
+    const elapsed = (performance.now() - state.soakStart) / 1000;
+    els.elapsed.textContent = elapsed.toFixed(1) + ' s';
+    els.rafstall.textContent = String(state.rafStalls);
+    if (state.running && (performance.now() - state.soakStart) >= SOAK_DURATION_MS) {
+      stopSoak();
+      return;
+    }
+  }
+  if (state.running) state.rafReq = requestAnimationFrame(rafLoop);
+}
+
+async function startSoak() {
+  els.btnPlay.disabled = true;
+  setVerdict('pending', 'RUNNING — DO NOT NAVIGATE AWAY');
+  els.log.innerHTML = '';
+  log('preparing AudioContext...');
+
+  // Reset state
+  state.pressTimeMs = performance.now();
+  state.firstAudioTimeMs = null;
+  state.latencyMs = null;
+  state.meanCpuPct = null;
+  state.maxCpuPct = 0;
+  state.glitches = 0;
+  state.buffers = 0;
+  state.rafStalls = 0;
+  state.rafLast = null;
+
+  try {
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+      latencyHint: 'interactive',
+    });
+    log(`AudioContext: sampleRate=${state.audioCtx.sampleRate} state=${state.audioCtx.state}`);
+    els.sr.textContent = String(state.audioCtx.sampleRate);
+    els.outlat.textContent =
+      (typeof state.audioCtx.outputLatency === 'number')
+        ? (state.audioCtx.outputLatency * 1000).toFixed(2) + ' ms' : 'unsupported';
+    els.baselat.textContent =
+      (typeof state.audioCtx.baseLatency === 'number')
+        ? (state.audioCtx.baseLatency * 1000).toFixed(2) + ' ms' : 'unsupported';
+
+    log('loading worklet module...');
+    await state.audioCtx.audioWorklet.addModule('bench-24a-worklet.js');
+
+    state.node = new AudioWorkletNode(state.audioCtx, 'voice303-bench', {
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+    });
+    state.node.port.onmessage = (e) => onWorkletMessage(e.data);
+    state.node.connect(state.audioCtx.destination);
+
+    if (state.audioCtx.state !== 'running') {
+      await state.audioCtx.resume();
+    }
+
+    log('soak start — playing 303 voice for 60 s');
+    els.state.textContent = 'running';
+    state.soakStart = performance.now();
+    state.running = true;
+    state.rafReq = requestAnimationFrame(rafLoop);
+
+    // Trigger one continuous note. The amp env decays over ~450 ms, so we
+    // retrigger every 500 ms to keep the worklet permanently busy on the
+    // expensive parts of the DSP path.
+    state.node.port.postMessage({ type: 'note_on', hz: 110 });
+    state.retriggerId = setInterval(() => {
+      try { state.node.port.postMessage({ type: 'note_on', hz: 110 + Math.random() * 220 }); }
+      catch (e) { /* worklet may have been torn down */ }
+    }, 500);
+  } catch (e) {
+    log(`ERROR: ${e.message || e}`, 'err');
+    setVerdict('fail', 'BENCH FAILED TO START');
+    els.btnPlay.disabled = false;
+    state.running = false;
+  }
+}
+
+function onWorkletMessage(msg) {
+  if (msg.type === 'noted_on') {
+    if (state.firstAudioTimeMs === null) {
+      // Worklet reports its currentTime at the note_on. The AudioContext's
+      // currentTime is a 0-anchored audio-thread clock; we need the press
+      // timestamp in the same clock. Approximation: take `performance.now()`
+      // *now* and subtract (currentTime - prior measurement) — but for the
+      // gate, what matters is press → first audible sample, which is what
+      // outputLatency + (firstProcess - press) gives us. The 'first_process'
+      // message below carries `performance.now()` from the worklet.
+    }
+  } else if (msg.type === 'first_process') {
+    if (state.firstAudioTimeMs === null && state.pressTimeMs !== null) {
+      state.firstAudioTimeMs = msg.performanceNow;
+      const outLat = (state.audioCtx && typeof state.audioCtx.outputLatency === 'number')
+                     ? state.audioCtx.outputLatency * 1000 : 0;
+      state.latencyMs = (state.firstAudioTimeMs - state.pressTimeMs) + outLat;
+      log(`first audio: ${(state.firstAudioTimeMs - state.pressTimeMs).toFixed(1)} ms `
+        + `+ outputLatency ${outLat.toFixed(1)} ms = ${state.latencyMs.toFixed(1)} ms`);
+      evaluateGate();
+    }
+  } else if (msg.type === 'stats') {
+    state.buffers = msg.buffers;
+    state.glitches = msg.glitches;
+    state.meanCpuPct = msg.worklet_cpu_pct;
+    const maxCpu = 100 * (msg.maxCallbackMs / msg.bufDurMs);
+    if (maxCpu > state.maxCpuPct) state.maxCpuPct = maxCpu;
+    els.buffers.textContent = String(msg.buffers);
+    els.cpuMax.textContent = state.maxCpuPct.toFixed(2) + ' %';
+    evaluateGate();
+  }
+}
+
+function stopSoak() {
+  if (!state.running) return;
+  state.running = false;
+  log('soak complete — tearing down');
+  els.state.textContent = 'stopped';
+
+  if (state.retriggerId) { clearInterval(state.retriggerId); state.retriggerId = null; }
+  if (state.rafReq) { cancelAnimationFrame(state.rafReq); state.rafReq = null; }
+
+  try {
+    if (state.node) { state.node.port.postMessage({ type: 'note_off' }); state.node.disconnect(); }
+    if (state.audioCtx) state.audioCtx.close();
+  } catch (e) {
+    log(`teardown warning: ${e.message || e}`, 'err');
+  }
+
+  const { lOk, cOk, gOk } = evaluateGate();
+  const allOk = lOk && cOk && gOk;
+  log(`verdict: latency ${lOk ? 'PASS' : 'FAIL'} | `
+    + `cpu ${cOk ? 'PASS' : 'FAIL'} | `
+    + `glitches ${gOk ? 'PASS' : 'FAIL'}`);
+  log(`final: latency=${state.latencyMs?.toFixed(1)}ms `
+    + `cpu_mean=${state.meanCpuPct?.toFixed(2)}% `
+    + `cpu_max=${state.maxCpuPct.toFixed(2)}% `
+    + `glitches=${state.glitches} buffers=${state.buffers} stalls=${state.rafStalls}`);
+
+  if (allOk) {
+    setVerdict('pass', 'GATE PASS — proceed to Sprint 24b');
+  } else {
+    setVerdict('fail', 'GATE FAIL — see readout');
+  }
+  els.btnPlay.disabled = false;
+  els.btnPlay.textContent = 'Re-run 60-second soak';
+}
+
+els.btnPlay.addEventListener('click', () => {
+  if (state.running) return;
+  startSoak();
+});
+
+// Friendly visibility-change warning — if the user switches tabs mid-soak,
+// some browsers throttle the AudioContext and the result is invalid.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.running) {
+    log('WARNING: tab hidden — most browsers throttle AudioWorklet here, '
+      + 'result is invalid if you don\'t come back before the soak ends', 'err');
+  }
+});
+</script>
+
+</body>
+</html>

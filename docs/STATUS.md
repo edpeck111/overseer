@@ -1,6 +1,6 @@
 # OVERSEER v3 — status board
 
-**Last updated:** end of Sprint 23b software-side — 2026-05-23.
+**Last updated:** end of Sprint 24a software-side — 2026-05-25.
 
 ---
 
@@ -9,18 +9,23 @@
   - HEAD ahead of `origin/v3-redesign` (`4a0f791`) by the Sprint 22.6
     map-dual-mode restore. ADR-0015 added; sextant text-map is the
     NAVIGATION default again, with Leaflet as a `G`-key opt-in.
-  - Sprints **0–22 + 22.6 + 23a done; 23b software-complete**.
-    Next queue:
-    - **Sprint 23a — DONE.** OPi5 LoRa transport
-      (`server/omp/lora_transport.py`), Meshtastic-as-transport
-      decision codified (ADR-0016), 17 new pytest, /api/hw/lora
-      endpoint.
-    - **Sprint 23b — SOFTWARE DONE.** Bench tool
-      (`tools/lora-spike.py`), 13 new pytest, runbook at
-      `docs/SPRINT-23b-RUNBOOK.md`. Hardware-on-the-air gate runs
-      when Ted has both Heltecs in hand.
+  - Sprints **0–22 + 22.6 + 23a done; 23b + 24a software-complete; 
+    systemd deploy unit landed**.
+    Hardware-blocked items waiting on Ted with kit in hand:
+    - **Sprint 23b on-air gate** — run `tools/lora-spike.py
+      --hardware ... soak` with two Heltecs per
+      `docs/SPRINT-23b-RUNBOOK.md`. Pastes its summary into a
+      `## Sprint 23b on-air gate evidence` block here on pass.
     - **Sprint 23c–e** — Cardputer firmware path. Blocked on 23b's
       on-air gate.
+    - **Sprint 24a device gate** — open `/v3/bench-24a.html` on a
+      2022+ phone + iPhone 13+ + desktop, press Start. Bench
+      enforces the criteria itself; paste verdict + readout into
+      a `## Sprint 24a device gate evidence` block here on pass.
+    - **Sprint 24b–f** — full TRACKER engine port. Blocked on 24a
+      device gate.
+    - **Sprint 25** — SDR + display backends. Independent hardware
+      paths, can run alongside 23c–e once attached.
     - **Sprint 24** — TRACKER audio module (WASM AudioWorklet, draws
       on `c:\source\tracker`).
     - **Sprint 25** — SDR + display backends + Cardputer polling
@@ -78,6 +83,8 @@ git push -u origin v3-redesign
 | 23c    | Cardputer firmware skeleton            | pending  | — |
 | 23d    | Cardputer firmware — read-only OMP     | pending  | — |
 | 23e    | Cardputer firmware — write/sync + UI   | pending  | — |
+| 23-svc | systemd unit for OPi5 one-command boot | done     | ✓ |
+| 24a    | TRACKER latency spike (WASM AudioWorklet)| sw-done| ⊘ |
 | 24     | TRACKER — send-the-score audio module  | pending  | — |
 | 25     | SDR + Display backends + Cardputer poll| pending  | — |
 
@@ -101,6 +108,117 @@ Test breakdown (357 total):
 
 Smoke: updated text-map assertion replaced with Leaflet map + no-tiles-banner
 check; /api/hw mock added; all prior assertions still passing.
+
+---
+
+## Sprint 24a deliverables (TRACKER latency-spike bench — software side)
+
+Landed 2026-05-25. **Status:** software-complete; the actual go/no-go
+gate is "open the page on a 2022+ phone, press Start, observe pass
+criteria." Browser-side test, not CI-testable. The bench enforces the
+gate itself: it labels each measurement PASS / FAIL on the live
+readout and prints the final verdict.
+
+### What landed
+
+`shell/public/bench-24a-worklet.js` (new, ~170 lines):
+  - Faithful port of `c:\source\tracker\src\engine\voice303.rs` +
+    `dsp/ladder.rs` hot path. Strips chorus / wobble / LFO / pan /
+    noise — what remains is what the WASM port would have to run
+    inside an AudioWorklet callback for the real TRACKER player.
+  - Signal path: PolyBLEP saw → asym soft pre-drive → Huovilainen
+    4-pole nonlinear ladder × 2× oversampling (8 tanh evaluations
+    per output sample — the dominant cost) → 3-stage tanh cascade
+    post-drive → AD amp envelope → output.
+  - No allocations in `process()`; preallocated Float32Arrays for
+    integrator + saturated states.
+  - Reports per-buffer timing back to the main thread: `first_process`
+    message once (for latency calc), `stats` message every 50 buffers
+    with mean/max callback time, buffers processed, glitch count,
+    `worklet_cpu_pct` (callback wall time / buffer audio time).
+  - Glitch detection: tracks the `currentTime` jump between
+    consecutive `process()` calls — if it's >1.8× the expected
+    buffer duration, count it as a missed buffer.
+
+`shell/public/bench-24a.html` (new, ~330 lines):
+  - Mobile-first single-page bench. Served at `/v3/bench-24a.html`
+    by the existing `_v3_shell` route in `server/app.py` (no new
+    routing needed).
+  - Terminal aesthetic matching the rest of the v3 shell. Self-
+    contained — no imports, no build step, opens directly in any
+    modern browser.
+  - "Start 60-second soak" button: on press, captures
+    `performance.now()`, creates `AudioContext({latencyHint: 'interactive'})`,
+    loads the worklet module, triggers a continuous 303 voice
+    (retriggered every 500 ms so the AD env never silences and the
+    DSP stays active for the full minute).
+  - Live readout: state / elapsed / latency / worklet CPU mean
+    + max / glitches / buffers processed / main-thread rAF stalls /
+    `outputLatency` / `baseLatency` / sample rate. Each gate row
+    flips green/red as data arrives.
+  - rAF loop monitors main-thread frame budget: any inter-frame
+    delta >33 ms counts as a stall (proxy for "the page can't keep
+    up with its budget").
+  - Final verdict: explicit "GATE PASS — proceed to Sprint 24b" /
+    "GATE FAIL — see readout" with full evidence in the run log.
+  - visibilitychange warning: most browsers throttle AudioWorklet
+    on hidden tabs — flagged loud and clear if the user backgrounds
+    the page mid-soak.
+
+### Gate (browser-evaluated)
+
+| Check | Criterion |
+|---|---|
+| input-to-audio latency | < 30 ms |
+| worklet CPU (steady-state mean) | < 5 % |
+| audio glitches over 60 s soak | 0 |
+| main-thread frame stalls | tracked, not gated |
+
+The bench enforces all three programmatically; the page only shows
+"GATE PASS" when every row is green. Failing rows are red on the
+live readout and on the final verdict.
+
+### How to run it
+
+  1. Browse to `<server>/v3/bench-24a.html` on a 2022+ Android phone
+     via Chrome, iPhone 13+ via Safari (iOS 17+), or desktop browser.
+  2. Press the orange "Start 60-second soak" button. Use speakers
+     or headphones — the bench plays an audible 303 voice for the
+     full minute.
+  3. Wait 60 seconds. Verdict appears at the top of the page.
+  4. Don't navigate away during the soak — the visibility warning
+     fires if you do, and most browsers throttle the audio thread
+     when hidden, invalidating the result.
+
+Tunnel URL (still live at this commit time):
+`https://california-repeated-see-working.trycloudflare.com/v3/bench-24a.html`
+
+### What 24a does NOT land
+
+  - **Per-device pass/fail records.** This sprint ships the bench;
+    you run it on whatever devices you care about and we paste
+    results into a `## Sprint 24a device gate evidence` block here
+    once we have them.
+  - **WASM compilation.** The bench is hand-ported JS, not a
+    wasm-pack build of the Rust engine. If 24a passes on hand-port
+    we know AudioWorklet can do it; the WASM path (mentioned as
+    risk mitigation in the Sprint 24 scope) is an option for
+    Sprint 24c when float-determinism matters.
+  - **Real TRACKER UX.** Just one voice playing a continuous
+    303-ish note. Polyphony, sequencer, sample playback all
+    deferred to 24c/d.
+
+### Risks called out by 24a's existence
+
+  - **iOS AudioContext + outputLatency.** Safari historically didn't
+    expose `outputLatency`. The bench displays "unsupported" in that
+    case and the latency gate effectively measures only the
+    page-side portion. On iOS 17+ this should be present per
+    WebKit's tracking; the bench will tell us.
+  - **Tab throttling on Android Chrome.** Most aggressive on
+    older Android; the visibilitychange handler flags it. If a
+    user reports unstable results, "did you keep the tab in the
+    foreground" is the first question.
 
 ---
 
