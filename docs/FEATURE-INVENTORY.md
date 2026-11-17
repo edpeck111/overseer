@@ -19,6 +19,60 @@ then plan the new architecture and UI around the ticked set.
 
 ---
 
+## Decisions — feature pick, 2026-11-17
+
+These were chosen through the picker in chat, and this list replaces the Keep checkboxes below.
+Anything not listed here is **dropped** from the redesign.
+
+**Modules kept:** Knowledge, Comms, Medical, Navigation, Log, Inventory, Auspice, Recreation,
+System and help, Rebuild *(new)*, Intel / Ritual / Archive *(new)*.
+**Modules dropped:** Power, Timeline, Signal (SDR), Tracker.
+
+| Area | Keep |
+|---|---|
+| AI (NPU) | Library chat with citations · Semantic search · Summaries and tagging · AI over LoRa |
+| Knowledge | Kiwix ZIM library · Branching chat sessions · Saved articles |
+| Comms | Encrypted DMs · Signed boards · Contacts and blocking · Mesh node list · Forward secrecy · Attachments |
+| Medical | Triage trees · Triage history · Dose calculator · Full drug database · Drug interactions |
+| Navigation | Waypoints · Compass · GPS · Sextant text map · Graphical map (opt-in) · Overlays · SRTM elevation · Line of sight · Routing · Text tiles over mesh |
+| Auspice | Sky and planets · Almanac · Natal chart · Tarot · I Ching · Runes · Encrypted journal · Sextant tarot art |
+| Recreation | Fortune · Wiki roulette · Chess · Trader · Morse trainer · Survival scenarios · v2 puzzle games |
+| System | System info · Users and auth · Settings · Real backups · Themes · Plugins · Easter eggs |
+| Mesh and devices | OMP over Meshtastic · Large-message fragmentation · Phone offline app |
+| UI | Keyboard-first hotkeys · Command palette · Terminal and CRT look · Sextant graphics default · Status strip always visible |
+
+**Dropped:**
+- AI: voice in, voice out, photo understanding
+- Games: Bunker adventure, Dragon's Tale
+- Inventory: pack optimiser, barcode scan
+- Devices: Pi Zero relay, e-paper (the Cardputer field relay is deferred to a later phase, not dropped)
+- Power: power telemetry and power-aware AI downgrade
+- Timeline: the unified timeline
+
+**Follow-up answers (same day):**
+1. **Log:** keep the journal, quick entries, auto-events and markdown export. **Inventory:** keep stock
+   tracking, expiry and low-stock alerts, and burn rate. Pack optimiser and barcode scan are dropped.
+2. **Power monitoring is dropped entirely.** There is no battery telemetry, and the INA226/shunt
+   adapters aren't carried forward. The status strip shows mesh, AI, clock and unread instead.
+3. **Phones get touch as a secondary input.** The design stays keyboard-first, but every hotkey
+   action must also be tappable.
+4. **The field relay is deferred, not dropped.** A custom relay (Cardputer or similar) is a later
+   phase. Until it exists, LoRa features (AI over LoRa, mesh comms) are built and tested
+   box-to-box or with a laptop and a USB Meshtastic radio (`tools/lora-spike.py` style). The
+   OMP-over-Meshtastic design should leave room for the relay as a client.
+
+**Dependencies to plan around:**
+- **Fragmentation** comes first on the mesh. AI over LoRa, attachments and text tiles all need it.
+- **The OMP fragment-flag clash** in the spec has to be resolved before fragmentation can be built.
+- **Kiwix** underpins library chat, semantic search, saved articles and wiki roulette.
+- **The NPU inference layer** underpins chat, search, and summaries and tagging.
+- **Forward secrecy** needs a matching double-ratchet library on both the JS and Python sides.
+- **Users and auth** must exist before multi-user comms, contacts and blocking, or the encrypted journal.
+- **Rebuild and Intel / Ritual / Archive** were never built. They need specs (Rebuild has one, REBUILD-SPEC-v2)
+  and hand-written content.
+
+---
+
 ## 0. The honest summary
 
 - **Plumbing: good.** The OMP codec, the Meshtastic transport, the hardware-adapter pattern
